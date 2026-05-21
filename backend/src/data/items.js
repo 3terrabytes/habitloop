@@ -243,6 +243,64 @@ const ITEMS = [
   { id: 'badge_omega',       type: 'badge',     name: 'Omega Badge',       rarity: 'mythic', cost: 2200, magic: 0,  emoji: 'Ω',  desc: 'The end. The beginning. The mark of a true legend.', legendsOnly: true, bonus: { type: 'xp_pct',     value: 25, label: '+25% XP from all sources' } },
   { id: 'title_ascendant',   type: 'title',     name: '"The Ascendant"',   rarity: 'mythic', cost: 2200, magic: 0,  emoji: '🌌', desc: 'Beyond mortal reach.', legendsOnly: true, bonus: { type: 'block_start', value: 12, label: 'Start every fight with 12 block' } },
   { id: 'title_godslayer',   type: 'title',     name: '"Godslayer"',       rarity: 'mythic', cost: 3000, magic: 0,  emoji: '⚔️', desc: 'You have ended gods.', legendsOnly: true, bonus: { type: 'first_hit_pct', value: 100, label: 'First hit each fight: 2x damage' } },
+
+  // ── 30 MORE STANDARD-RARITY SHOP ITEMS ─────────────────────────────────
+  // Weapons (8)
+  { id: 'sword_serpent',      type: 'weapon',    name: 'Serpent Fang',      rarity: 'rare',      cost: 290,  magic: 13, emoji: '🐍', desc: 'Hisses with venom on every swing.' },
+  { id: 'sword_titan',        type: 'weapon',    name: 'Titan Cleaver',     rarity: 'epic',      cost: 580,  magic: 27, emoji: '⚒️', desc: 'Heavier than your last regret.' },
+  { id: 'bow_thunderbird',    type: 'weapon',    name: 'Thunderbird Bow',   rarity: 'epic',      cost: 570,  magic: 25, emoji: '🦅', desc: 'Loosed like a thunderclap.' },
+  { id: 'staff_mosswarden',   type: 'weapon',    name: 'Mosswarden Staff',  rarity: 'rare',      cost: 270,  magic: 13, emoji: '🌿', desc: 'A staff that remembers the forest.' },
+  { id: 'staff_runic',        type: 'weapon',    name: 'Runic Pillar',      rarity: 'legendary', cost: 1280, magic: 47, emoji: '🔯', desc: 'Carved with letters that pre-date language.' },
+  { id: 'dagger_silentbite',  type: 'weapon',    name: 'Silent Bite',       rarity: 'epic',      cost: 540,  magic: 24, emoji: '🩸', desc: 'No sound. No warning.' },
+  { id: 'axe_gravesinger',    type: 'weapon',    name: 'Gravesinger Axe',   rarity: 'epic',      cost: 560,  magic: 25, emoji: '⚱️', desc: 'Hums softly between strikes.' },
+  { id: 'wand_whisperfire',   type: 'weapon',    name: 'Whisperfire Wand',  rarity: 'rare',      cost: 280,  magic: 13, emoji: '🕯️', desc: 'Flames that lean in to listen.' },
+
+  // Armor (6)
+  { id: 'armor_kelp',         type: 'armor',     name: 'Kelp Mail',         rarity: 'common',    cost: 90,   magic: 3,  emoji: '🌊', desc: 'Smells faintly of low tide.' },
+  { id: 'armor_riveted',      type: 'armor',     name: 'Riveted Plate',     rarity: 'rare',      cost: 280,  magic: 12, emoji: '⛓️', desc: 'Clinks reassuringly.' },
+  { id: 'armor_terra',        type: 'armor',     name: 'Terraborn Plate',   rarity: 'rare',      cost: 290,  magic: 13, emoji: '🪨', desc: 'Hewn from a forgotten mountain.' },
+  { id: 'armor_emberweave',   type: 'armor',     name: 'Emberweave Cloak',  rarity: 'epic',      cost: 580,  magic: 26, emoji: '🪔', desc: 'Stitched from cooling lava.' },
+  { id: 'armor_shadowmail',   type: 'armor',     name: 'Shadowmail',        rarity: 'epic',      cost: 560,  magic: 25, emoji: '🌑', desc: 'Drinks the lamplight.' },
+  { id: 'armor_aurora',       type: 'armor',     name: 'Aurora Plate',      rarity: 'legendary', cost: 1280, magic: 46, emoji: '🎆', desc: 'A second skin of dancing light.' },
+
+  // Banners (5)
+  { id: 'banner_meadow',      type: 'banner',    name: 'Meadow Banner',     rarity: 'common',    cost: 55,   magic: 0,  color: 'linear-gradient(90deg,#365314,#84cc16,#facc15)', desc: 'Sunshine on tall grass.' },
+  { id: 'banner_storm_calm',  type: 'banner',    name: 'Calm Before Storm', rarity: 'rare',      cost: 195,  magic: 0,  color: 'linear-gradient(90deg,#0f172a,#475569,#94a3b8)', desc: 'A flat-grey hush.' },
+  { id: 'banner_eclipse',     type: 'banner',    name: 'Eclipse Banner',    rarity: 'epic',      cost: 470,  magic: 0,  color: 'linear-gradient(90deg,#000000,#7f1d1d,#ea580c)', desc: 'A dark sun, ringed in fire.' },
+  { id: 'banner_iceflow',     type: 'banner',    name: 'Iceflow Banner',    rarity: 'rare',      cost: 200,  magic: 0,  color: 'linear-gradient(90deg,#0c4a6e,#0ea5e9,#bae6fd,#ffffff)', desc: 'A river that forgot to thaw.' },
+  { id: 'banner_emberglow',   type: 'banner',    name: 'Ember Glow',        rarity: 'epic',      cost: 460,  magic: 0,  color: 'linear-gradient(90deg,#7c2d12,#dc2626,#f97316,#fbbf24)', desc: 'Banked coals at dusk.' },
+
+  // Badges (5)
+  { id: 'badge_compass',      type: 'badge',     name: 'Compass Badge',     rarity: 'common',    cost: 40,   magic: 0,  emoji: '🧭', desc: 'Always points elsewhere.' },
+  { id: 'badge_arrow',        type: 'badge',     name: 'Arrow Badge',       rarity: 'common',    cost: 35,   magic: 0,  emoji: '🏹', desc: 'Aimed at something.' },
+  { id: 'badge_owl',          type: 'badge',     name: 'Watcher Badge',     rarity: 'rare',      cost: 165,  magic: 0,  emoji: '🦉', desc: 'Sees in the dark.' },
+  { id: 'badge_quill',        type: 'badge',     name: 'Quill Badge',       rarity: 'rare',      cost: 170,  magic: 0,  emoji: '🪶', desc: 'Mightier than the sword, allegedly.' },
+  { id: 'badge_dawn',         type: 'badge',     name: 'Dawn Badge',        rarity: 'epic',      cost: 420,  magic: 0,  emoji: '🌅', desc: 'First light, always.' },
+
+  // Companions (4)
+  { id: 'pet_axolotl',        type: 'companion', name: 'Pocket Axolotl',    rarity: 'rare',      cost: 350,  magic: 14, emoji: '🦎', desc: 'Smiling. Ancient. Pink.' },
+  { id: 'pet_swan',           type: 'companion', name: 'Black Swan',        rarity: 'epic',      cost: 580,  magic: 25, emoji: '🦢', desc: 'Regal. Will hiss.' },
+  { id: 'pet_moth',           type: 'companion', name: 'Lantern Moth',      rarity: 'common',    cost: 140,  magic: 6,  emoji: '🦋', desc: 'Drawn to the light. To any light.' },
+  { id: 'pet_squid',          type: 'companion', name: 'Inkwell Squid',     rarity: 'epic',      cost: 600,  magic: 27, emoji: '🦑', desc: 'More arms than friends.' },
+
+  // Titles (2)
+  { id: 'title_storm',        type: 'title',     name: '"The Storm-Touched"',rarity: 'rare',     cost: 260,  magic: 0,  emoji: '⚡', desc: 'Thunder follows where you walk.' },
+  { id: 'title_unbroken',     type: 'title',     name: '"The Unbroken"',    rarity: 'epic',      cost: 540,  magic: 0,  emoji: '💪', desc: 'Bent often. Broken never.' },
+
+  // ── 10 MORE MYTHIC ITEMS (Legends shop, L10+) ─────────────────────────
+  // Each has a bonus drawn from the existing bonus types. Several are
+  // stronger versions of the original mythic line — alternatives so the
+  // endgame has actual choice rather than only one of each.
+  { id: 'sword_voidreaver',   type: 'weapon',    name: 'Voidreaver',         rarity: 'mythic', cost: 3900, magic: 72, emoji: '🌑', desc: 'Devours light. Devours bone.',             legendsOnly: true, bonus: { type: 'dmg_pct',         value: 30, label: '+30% damage dealt' } },
+  { id: 'staff_aether',       type: 'weapon',    name: 'Aether Conduit',     rarity: 'mythic', cost: 3600, magic: 70, emoji: '🌀', desc: 'Tears holes between the stars.',          legendsOnly: true, bonus: { type: 'crit_pct',        value: 30, label: '+30% crit chance' } },
+  { id: 'bow_solar',          type: 'weapon',    name: 'Solar Bow',          rarity: 'mythic', cost: 3700, magic: 71, emoji: '☀️', desc: 'Loosed like the sun rising.',             legendsOnly: true, bonus: { type: 'dmg_pct',         value: 25, label: '+25% damage dealt' } },
+  { id: 'armor_eclipse_m',    type: 'armor',     name: 'Eclipse Plate',      rarity: 'mythic', cost: 3400, magic: 67, emoji: '🌒', desc: 'Hides you from the second hand.',         legendsOnly: true, bonus: { type: 'max_hp_pct',      value: 30, label: '+30% max HP' } },
+  { id: 'armor_titan_m',      type: 'armor',     name: 'Titan Aegis',        rarity: 'mythic', cost: 3700, magic: 69, emoji: '🏛️', desc: 'Wrought for godkind, given freely.',      legendsOnly: true, bonus: { type: 'dmg_taken_pct',  value: -25, label: '-25% damage taken' } },
+  { id: 'pet_kraken',         type: 'companion', name: 'Krakenling',         rarity: 'mythic', cost: 4000, magic: 76, emoji: '🐙', desc: 'Older than the seas it swims through.',   legendsOnly: true, bonus: { type: 'pet_dmg_pct',    value: 60, label: '+60% pet damage' } },
+  { id: 'pet_simurgh',        type: 'companion', name: 'Simurgh',            rarity: 'mythic', cost: 3900, magic: 74, emoji: '🦚', desc: 'A many-feathered eternity.',              legendsOnly: true, bonus: { type: 'xp_pct',         value: 30, label: '+30% XP from all sources' } },
+  { id: 'banner_aeon',        type: 'banner',    name: 'Aeon Banner',        rarity: 'mythic', cost: 2700, magic: 0,  color: 'linear-gradient(90deg,#000000,#f59e0b,#ec4899,#7c3aed,#000000)', desc: 'Time itself, woven into cloth.', legendsOnly: true, bonus: { type: 'gold_pct',       value: 35, label: '+35% gold from dungeon' } },
+  { id: 'badge_alpha',        type: 'badge',     name: 'Alpha Badge',        rarity: 'mythic', cost: 2300, magic: 0,  emoji: 'α',  desc: 'First. Always.',                          legendsOnly: true, bonus: { type: 'block_start',    value: 20, label: 'Start every fight with 20 block' } },
+  { id: 'title_inevitable',   type: 'title',     name: '"The Inevitable"',   rarity: 'mythic', cost: 3100, magic: 0,  emoji: '⏳', desc: 'You arrive, eventually, always.',         legendsOnly: true, bonus: { type: 'first_hit_pct',  value: 100, label: 'First hit each fight: 2x damage' } },
 ];
 
 // ── PACKS ────────────────────────────────────────────────────────────────
