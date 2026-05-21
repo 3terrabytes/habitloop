@@ -20,8 +20,10 @@ router.get('/shop', async (req, res) => {
   const { rows: userRows } = await pool.query('SELECT gold, level FROM users WHERE id = $1', [req.userId]);
   const { rows: owned } = await pool.query('SELECT item_id FROM user_inventory WHERE user_id = $1', [req.userId]);
   const level = userRows[0]?.level || 1;
-  // Hide milestone-reward items (granted automatically) and gate legends to L10+.
-  let items = ITEMS.filter(i => !i.unlockReward);
+  // Hide milestone-reward items, consumables (gear-only shop), and gate
+  // legends to L10+. Consumables can still appear inside bundles and stay
+  // usable from inventory, just not for direct purchase.
+  let items = ITEMS.filter(i => !i.unlockReward && i.type !== 'consumable');
   if (level < 10) items = items.filter(i => !i.legendsOnly);
   res.json({
     gold: userRows[0]?.gold || 0,
@@ -42,6 +44,10 @@ router.post('/shop/buy/:itemId', async (req, res) => {
   // level milestones (banner_veteran @25, banner_ascendant @50, banner_incarnate @100).
   if (item.unlockReward) {
     return res.status(403).json({ error: 'This banner can only be earned by reaching a level milestone.' });
+  }
+  // Consumables are no longer sold individually — they only drop from bundles.
+  if (item.type === 'consumable') {
+    return res.status(403).json({ error: 'Consumables are no longer available in the shop.' });
   }
 
   const { rows } = await pool.query('SELECT gold, level, username FROM users WHERE id = $1', [req.userId]);

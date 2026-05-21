@@ -198,7 +198,11 @@ router.post('/:id/turn', async (req, res) => {
       const variance = 0.9 + Math.random() * 0.2;
       const crit = Math.random() < 0.10;
       const raw = base * variance * (crit ? 2 : 1);
-      const mitigated = Math.max(1, Math.round(raw - (them.armor || 0) * 0.4));
+      // Same capped-percentage formula as the dungeon (max 35% reduction)
+      // so PvP isn't a stale-mate between two armor-stacked players.
+      const armorAmt = them.armor || 0;
+      const reduction = Math.min(0.35, armorAmt / (armorAmt + 150));
+      const mitigated = Math.max(1, Math.round(raw * (1 - reduction)));
       theirHp = Math.max(0, theirHp - mitigated);
       logEntry.dmg = mitigated;
       logEntry.crit = crit;

@@ -16,10 +16,17 @@ const rollDamage = (attack, magic, multiplier = 1) => {
   return { dmg: Math.round(base * variance * (crit ? 2 : 1) * multiplier), crit };
 };
 
+// Armor now scales as a percentage with a cap, instead of a flat subtraction.
+// Old formula let high-tier armor mitigate boss attacks to ~10 damage. New
+// formula: armor reduces damage taken by a fraction that caps at 35%.
+//   armor 30  =>  20% reduction
+//   armor 65  =>  30% reduction
+//   armor 100 =>  35% reduction (cap)
 const monsterDamage = (monster, armor, defenseMult = 1) => {
   const variance = 0.9 + Math.random() * 0.2;
   const raw = (monster.power || 0) * variance;
-  const mitigated = Math.max(1, (raw - armor * 0.4) * defenseMult);
+  const reduction = Math.min(0.35, (armor || 0) / ((armor || 0) + 150));
+  const mitigated = Math.max(1, raw * (1 - reduction) * defenseMult);
   return Math.round(mitigated);
 };
 

@@ -507,7 +507,7 @@ export default function AvatarPage() {
           </aside>
           <div style={styles.gridCol}>
           <div style={styles.filterRow}>
-            {['all', 'pack', ...TYPES, 'consumable', 'legends'].map(f => {
+            {['all', 'pack', ...TYPES, 'legends'].map(f => {
               const isLegends = f === 'legends';
               const active = shopFilter === f;
               return (
