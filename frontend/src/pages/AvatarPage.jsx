@@ -202,6 +202,24 @@ export default function AvatarPage() {
     await load();
   };
 
+  const [selling, setSelling] = useState(null);
+  const sell = async (item) => {
+    if (selling) return;
+    const refund = Math.max(1, Math.floor((item.cost || 0) * 0.5));
+    if (!window.confirm(`Sell ${item.name} for ${refund} gold? This is permanent.`)) return;
+    setSelling(item.id);
+    try {
+      const res = await api.avatar.sell(item.id);
+      showToast(`Sold ${item.name} for ${res.refund} gold`);
+      await load();
+      await refreshUser?.();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSelling(null);
+    }
+  };
+
   const useItem = async (item) => {
     if (using) return;
     setUsing(item.id);
@@ -785,20 +803,42 @@ export default function AvatarPage() {
                     )}
                     <div style={{ flex: 1 }} />
                     {item.type === 'consumable' ? (
-                      <button className="btn btn-primary" style={{ width: '100%', fontSize: 12, padding: '6px', background: '#b45309', borderColor: '#b45309' }}
-                        disabled={using === item.id}
-                        onClick={(e) => { e.stopPropagation(); setConfirmUse(item); }}>
-                        {using === item.id ? '...' : '⚡ Use'}
-                      </button>
-                    ) : isEquipped ? (
-                      <button className="btn btn-ghost" style={{ width: '100%', fontSize: 12, padding: '6px' }}
-                        onClick={(e) => { e.stopPropagation(); unequip(item.type); }}>Unequip</button>
+                      <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                        <button className="btn btn-primary" style={{ flex: 1, fontSize: 12, padding: '6px', background: '#b45309', borderColor: '#b45309' }}
+                          disabled={using === item.id}
+                          onClick={(e) => { e.stopPropagation(); setConfirmUse(item); }}>
+                          {using === item.id ? '...' : '⚡ Use'}
+                        </button>
+                        {!item.unlockReward && (
+                          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '6px 8px', color: 'var(--gold)' }}
+                            title={`Sell for ${Math.max(1, Math.floor((item.cost || 0) * 0.5))} gold`}
+                            disabled={selling === item.id}
+                            onClick={(e) => { e.stopPropagation(); sell(item); }}>
+                            {selling === item.id ? '...' : '🪙'}
+                          </button>
+                        )}
+                      </div>
                     ) : (
-                      <button className="btn btn-primary" style={{ width: '100%', fontSize: 12, padding: '6px' }}
-                        disabled={equipping === item.id}
-                        onClick={(e) => { e.stopPropagation(); equip(item); }}>
-                        {equipping === item.id ? '...' : 'Equip'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                        {isEquipped ? (
+                          <button className="btn btn-ghost" style={{ flex: 1, fontSize: 12, padding: '6px' }}
+                            onClick={(e) => { e.stopPropagation(); unequip(item.type); }}>Unequip</button>
+                        ) : (
+                          <button className="btn btn-primary" style={{ flex: 1, fontSize: 12, padding: '6px' }}
+                            disabled={equipping === item.id}
+                            onClick={(e) => { e.stopPropagation(); equip(item); }}>
+                            {equipping === item.id ? '...' : 'Equip'}
+                          </button>
+                        )}
+                        {!item.unlockReward && (
+                          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '6px 8px', color: 'var(--gold)' }}
+                            title={`Sell for ${Math.max(1, Math.floor((item.cost || 0) * 0.5))} gold`}
+                            disabled={selling === item.id || isEquipped}
+                            onClick={(e) => { e.stopPropagation(); sell(item); }}>
+                            {selling === item.id ? '...' : '🪙'}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 );

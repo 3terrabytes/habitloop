@@ -62,6 +62,7 @@ export const api = {
   avatar: {
     shop: () => req('GET', '/avatar/shop'),
     buy: (id) => req('POST', `/avatar/shop/buy/${id}`),
+    sell: (id) => req('POST', `/avatar/sell/${id}`),
     buyPack: (id) => req('POST', `/avatar/shop/buy-pack/${id}`),
     inventory: () => req('GET', '/avatar/inventory'),
     equip: (id) => req('POST', `/avatar/equip/${id}`),
@@ -119,5 +120,7 @@ export const api = {
     attacks: () => req('GET', '/dungeon/attacks'),
     monsters: () => req('GET', '/dungeon/monsters'),
     potions: () => req('GET', '/dungeon/potions'),
+    upgradeAttack: (id) => req('POST', `/dungeon/attacks/${id}/upgrade`),
+    learnAttack:   (id) => req('POST', `/dungeon/attacks/${id}/learn`),
   },
 };

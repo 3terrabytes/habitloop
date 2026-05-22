@@ -2,7 +2,10 @@ const express = require('express');
 const { pool } = require('../db');
 const auth = require('../middleware/auth');
 const { addXP, addGold } = require('../utils/xp');
-const { ATTACKS, attackById, attacksForClass, DEFAULT_LOADOUT, defaultLoadoutFor } = require('../data/attacks');
+const {
+  ATTACKS, attackById, attacksForClass, DEFAULT_LOADOUT, defaultLoadoutFor,
+  upgradeCostFor, maxLevelFor, leveledPower, leveledHeal,
+} = require('../data/attacks');
 const { MONSTERS, monsterById, scaledMonster } = require('../data/monsters');
 const { generateMap, POTIONS, potionById } = require('../data/dungeon');
 const { itemById, weaponClassOf, bonusesFrom } = require('../data/items');
@@ -60,25 +63,59 @@ async function userArmor(userId) {
   return armor?.magic || 0;
 }
 
-// Get the loadout, falling back to defaults if the user has never set one.
-// Also strips any attacks that are no longer valid for the current weapon —
-// the client renders the result so the UI never shows orphaned moves.
+// Look up attack levels + unlocks for the user. Returns:
+//   levels    — Map of attack_id -> level (only present for attacks the user
+//               has interacted with; default to 1 client-side)
+//   unlocked  — Set of attack_ids the user has paid to learn
+async function userAttackProgress(userId) {
+  const [{ rows: lvlRows }, { rows: unlockedRows }] = await Promise.all([
+    pool.query('SELECT attack_id, level FROM user_attack_levels WHERE user_id = $1', [userId]),
+    pool.query('SELECT attack_id FROM user_unlocked_attacks WHERE user_id = $1', [userId]),
+  ]);
+  const levels = {};
+  for (const r of lvlRows) levels[r.attack_id] = r.level;
+  const unlocked = new Set(unlockedRows.map(r => r.attack_id));
+  return { levels, unlocked };
+}
+
+// Decorate an attack with its current level + damage/heal scaled, plus
+// lock + cost info. Used by the loadout editor and the loadout endpoint
+// so the frontend doesn't need to duplicate scaling math.
+function decorateAttack(attack, levels, unlocked) {
+  if (!attack) return null;
+  const level     = levels[attack.id] || 1;
+  const maxLevel  = maxLevelFor(attack);
+  const nextCost  = upgradeCostFor(level);
+  const isLocked  = !!attack.learnCost && !unlocked.has(attack.id);
+  return {
+    ...attack,
+    level,
+    maxLevel,
+    nextUpgradeCost: nextCost,
+    leveledPower: leveledPower(attack, level),
+    leveledHeal:  leveledHeal(attack, level),
+    locked: isLocked,
+  };
+}
+
 router.get('/loadout', async (req, res) => {
   try {
-    const [{ rows }, weaponClass, magic, armor] = await Promise.all([
+    const [{ rows }, weaponClass, magic, armor, progress] = await Promise.all([
       pool.query('SELECT slot1, slot2, slot3, slot4 FROM user_attacks WHERE user_id = $1', [req.userId]),
       userWeaponClass(req.userId),
       userMagic(req.userId),
       userArmor(req.userId),
+      userAttackProgress(req.userId),
     ]);
     const row = rows[0];
     const stored = row ? [row.slot1, row.slot2, row.slot3, row.slot4] : [];
     const available = attacksForClass(weaponClass);
-    const availableIds = new Set(available.map(a => a.id));
+    // The loadout itself can only use unlocked attacks. If a stored slot is
+    // somehow locked (e.g. data change), drop it and fall back.
+    const availableIds = new Set(
+      available.filter(a => !a.learnCost || progress.unlocked.has(a.id)).map(a => a.id)
+    );
 
-    // Prefer stored slot if still usable, otherwise fall back to a
-    // weapon-aware default (so swapping weapons lights up the new movepool
-    // immediately instead of leaving the player with Punch/Kick).
     const fallback = defaultLoadoutFor(weaponClass);
     const slots = [];
     for (let i = 0; i < 4; i++) {
@@ -91,15 +128,110 @@ router.get('/loadout', async (req, res) => {
 
     res.json({
       slots,
-      slotDetails: slots.map(id => attackById(id)).filter(Boolean),
-      available,
+      slotDetails: slots.map(id => decorateAttack(attackById(id), progress.levels, progress.unlocked)).filter(Boolean),
+      available: available.map(a => decorateAttack(a, progress.levels, progress.unlocked)),
       weaponClass,
       magic,
       armor,
-      bonuses, // { dmg_pct, crit_pct, pet_dmg_pct, max_hp_pct, block_start, first_hit_pct, dmg_taken_pct, gold_pct, xp_pct }
+      bonuses,
+      levels: progress.levels,
+      unlocked: Array.from(progress.unlocked),
     });
   } catch (err) {
     console.error('dungeon/loadout error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Pay gold to upgrade an attack's level. Each level boosts damage and heal
+// by a fixed percentage (see attacks.js LEVEL_MULT). Maxed attacks return
+// 400 so the UI can disable the button.
+router.post('/attacks/:attackId/upgrade', async (req, res) => {
+  try {
+    const { attackId } = req.params;
+    const attack = attackById(attackId);
+    if (!attack) return res.status(404).json({ error: 'Unknown attack' });
+
+    const { rows: lvlRows } = await pool.query(
+      'SELECT level FROM user_attack_levels WHERE user_id = $1 AND attack_id = $2',
+      [req.userId, attackId]
+    );
+    const currentLevel = lvlRows[0]?.level || 1;
+    const maxLevel = maxLevelFor(attack);
+    if (currentLevel >= maxLevel) return res.status(400).json({ error: 'Already at max level' });
+
+    const cost = upgradeCostFor(currentLevel);
+    if (!cost) return res.status(400).json({ error: 'No upgrade available' });
+
+    const { rows: userRows } = await pool.query(
+      'SELECT gold, username FROM users WHERE id = $1', [req.userId]
+    );
+    const me = userRows[0];
+    const isTheDevs = me?.username?.toLowerCase() === 'thedevs';
+    if (!isTheDevs && (me?.gold || 0) < cost) {
+      return res.status(400).json({ error: 'Not enough gold' });
+    }
+
+    if (!isTheDevs) {
+      await pool.query('UPDATE users SET gold = gold - $1 WHERE id = $2', [cost, req.userId]);
+    }
+    const newLevel = currentLevel + 1;
+    await pool.query(
+      `INSERT INTO user_attack_levels (user_id, attack_id, level) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, attack_id) DO UPDATE SET level = EXCLUDED.level`,
+      [req.userId, attackId, newLevel]
+    );
+
+    const { rows: updated } = await pool.query('SELECT gold FROM users WHERE id = $1', [req.userId]);
+    res.json({
+      attackId,
+      level: newLevel,
+      maxLevel,
+      leveledPower: leveledPower(attack, newLevel),
+      leveledHeal:  leveledHeal(attack, newLevel),
+      nextUpgradeCost: upgradeCostFor(newLevel),
+      gold: updated[0].gold,
+    });
+  } catch (err) {
+    console.error('dungeon/attacks/upgrade error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Pay gold to learn a locked attack. Free attacks (no learnCost) 400.
+router.post('/attacks/:attackId/learn', async (req, res) => {
+  try {
+    const { attackId } = req.params;
+    const attack = attackById(attackId);
+    if (!attack) return res.status(404).json({ error: 'Unknown attack' });
+    if (!attack.learnCost) return res.status(400).json({ error: 'Attack is already free' });
+
+    const { rows: existing } = await pool.query(
+      'SELECT 1 FROM user_unlocked_attacks WHERE user_id = $1 AND attack_id = $2',
+      [req.userId, attackId]
+    );
+    if (existing.length) return res.status(400).json({ error: 'Already learned' });
+
+    const { rows: userRows } = await pool.query(
+      'SELECT gold, username FROM users WHERE id = $1', [req.userId]
+    );
+    const me = userRows[0];
+    const isTheDevs = me?.username?.toLowerCase() === 'thedevs';
+    if (!isTheDevs && (me?.gold || 0) < attack.learnCost) {
+      return res.status(400).json({ error: 'Not enough gold' });
+    }
+    if (!isTheDevs) {
+      await pool.query('UPDATE users SET gold = gold - $1 WHERE id = $2', [attack.learnCost, req.userId]);
+    }
+    await pool.query(
+      `INSERT INTO user_unlocked_attacks (user_id, attack_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [req.userId, attackId]
+    );
+    const { rows: updated } = await pool.query('SELECT gold FROM users WHERE id = $1', [req.userId]);
+    res.json({ attackId, gold: updated[0].gold });
+  } catch (err) {
+    console.error('dungeon/attacks/learn error', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -112,10 +244,15 @@ router.post('/loadout', async (req, res) => {
       return res.status(400).json({ error: 'Need exactly 4 slots' });
     }
     const weaponClass = await userWeaponClass(req.userId);
-    const availableIds = new Set(attacksForClass(weaponClass).map(a => a.id));
+    const progress = await userAttackProgress(req.userId);
+    const availableIds = new Set(
+      attacksForClass(weaponClass)
+        .filter(a => !a.learnCost || progress.unlocked.has(a.id))
+        .map(a => a.id)
+    );
     for (const id of slots) {
       if (!availableIds.has(id)) {
-        return res.status(400).json({ error: `Attack "${id}" not available for your weapon` });
+        return res.status(400).json({ error: `Attack "${id}" not available — check weapon class and unlocks` });
       }
     }
     await pool.query(

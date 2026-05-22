@@ -248,6 +248,14 @@ export default function PixelCharacter({
             <title>{companion.name}: {companion.desc}</title>
             <ellipse cx="14" cy="74" rx="6" ry="1.5" fill="rgba(0,0,0,0.35)" />
             {renderPet(companion.id, cheering)}
+            {/* Rare+ pets get an animated sparkle dot drifting above them. */}
+            {companion.rarity && companion.rarity !== 'common' && (
+              <g className="pet-sparkle">
+                <rect x="19" y="60" width="1" height="1" fill={sparkleColor(companion.rarity)} />
+                <rect x="20" y="59" width="1" height="1" fill={sparkleColor(companion.rarity)} opacity="0.7" />
+                <rect x="18" y="59" width="1" height="1" fill={sparkleColor(companion.rarity)} opacity="0.7" />
+              </g>
+            )}
           </g>
         )}
       </svg>
@@ -501,8 +509,45 @@ function renderPet(id, cheering) {
     case 'pet_fox':    return <FoxSprite />;
     case 'pet_owl':    return <OwlSprite />;
     case 'pet_dragon': return <DragonSprite cheering={cheering} />;
+    case 'pet_frog':   return <FrogSprite />;
     default:           return null;
   }
+}
+
+function sparkleColor(rarity) {
+  switch (rarity) {
+    case 'legendary': return '#fbbf24';
+    case 'epic':      return '#c4b5fd';
+    case 'rare':      return '#93c5fd';
+    case 'mythic':    return '#f0abfc';
+    default:          return '#ffffff';
+  }
+}
+
+function FrogSprite() {
+  const G  = '#22c55e';
+  const GD = '#15803d';
+  const GL = '#86efac';
+  return (
+    <g>
+      {/* eyes (bulging on top) */}
+      <rect x="10" y="62" width="2" height="2" fill={G} />
+      <rect x="13" y="62" width="2" height="2" fill={G} />
+      <rect x="11" y="63" width="1" height="1" fill="#1a1a1a" />
+      <rect x="14" y="63" width="1" height="1" fill="#1a1a1a" />
+      {/* body */}
+      <rect x="9"  y="64" width="7" height="6" fill={G} />
+      <rect x="10" y="68" width="5" height="2" fill={GL} />
+      <rect x="9"  y="64" width="7" height="1" fill={GD} />
+      {/* legs */}
+      <rect x="8"  y="70" width="3" height="2" fill={GD} />
+      <rect x="14" y="70" width="3" height="2" fill={GD} />
+      <rect x="8"  y="72" width="2" height="1" fill={GD} />
+      <rect x="15" y="72" width="2" height="1" fill={GD} />
+      {/* mouth */}
+      <rect x="11" y="67" width="3" height="1" fill={GD} />
+    </g>
+  );
 }
 
 function CatSprite() {

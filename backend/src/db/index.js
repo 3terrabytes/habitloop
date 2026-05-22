@@ -140,6 +140,24 @@ const initDB = async () => {
       slot4 VARCHAR(40)
     );
 
+    -- Per-attack level. Each upgrade increases damage / heal by a fixed pct.
+    -- Level 1 is the base attack; max level enforced server-side.
+    CREATE TABLE IF NOT EXISTS user_attack_levels (
+      user_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      attack_id VARCHAR(40) NOT NULL,
+      level     INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (user_id, attack_id)
+    );
+
+    -- Attacks the user has paid to learn. Only relevant for attacks whose
+    -- data file lists a `learnCost`. Free attacks are usable without an entry.
+    CREATE TABLE IF NOT EXISTS user_unlocked_attacks (
+      user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      attack_id   VARCHAR(40) NOT NULL,
+      unlocked_at TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (user_id, attack_id)
+    );
+
     -- Dungeon: how many bosses the player has cleared (ascension level).
     -- Surfaced on /auth/me and used to gate harder difficulties.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS dungeon_ascension INTEGER DEFAULT 0;

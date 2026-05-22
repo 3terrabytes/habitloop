@@ -188,6 +188,38 @@ router.post('/equip/:itemId', async (req, res) => {
   res.json({ success: true, equipped: item });
 });
 
+// Sell an item back to the shop for 50% of its cost. Unequips first if it
+// was the currently-equipped item in any slot, so the player doesn't end up
+// with a dangling reference to an item they no longer own.
+router.post('/sell/:itemId', async (req, res) => {
+  const item = itemById(req.params.itemId);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (item.unlockReward) return res.status(403).json({ error: 'Milestone rewards cannot be sold.' });
+
+  const { rows: ownRows } = await pool.query(
+    'SELECT id FROM user_inventory WHERE user_id = $1 AND item_id = $2',
+    [req.userId, item.id]
+  );
+  if (!ownRows.length) return res.status(403).json({ error: 'Not in inventory' });
+
+  const refund = Math.max(1, Math.floor((item.cost || 0) * 0.5));
+
+  // Unequip from every slot that references this item so the player can't
+  // end up "wearing" something they no longer own.
+  const slots = ['weapon', 'armor', 'banner', 'badge', 'companion', 'title'];
+  for (const slot of slots) {
+    await pool.query(
+      `UPDATE user_equipped SET ${slot} = NULL WHERE user_id = $1 AND ${slot} = $2`,
+      [req.userId, item.id]
+    );
+  }
+
+  await pool.query('DELETE FROM user_inventory WHERE user_id = $1 AND item_id = $2', [req.userId, item.id]);
+  await pool.query('UPDATE users SET gold = gold + $1 WHERE id = $2', [refund, req.userId]);
+  const { rows: updated } = await pool.query('SELECT gold FROM users WHERE id = $1', [req.userId]);
+  res.json({ success: true, refund, gold: updated[0].gold });
+});
+
 // Unequip a slot
 router.delete('/equip/:slot', async (req, res) => {
   const slot = req.params.slot;

@@ -7,9 +7,12 @@ import PixelCharacter from '../components/PixelCharacter';
 // Player max HP scales with level: 100 + 20 per level.
 const playerMaxHp = (level) => 100 + 20 * (level || 1);
 
-// Player attack damage = base power + magic, with light random variance.
+// Player attack damage = leveled power + magic, with light random variance.
+// `attack.leveledPower` comes from the backend (level-1 attacks set it to
+// equal `attack.power`). `attack.power` is the fallback if the field is missing.
 const rollDamage = (attack, magic, multiplier = 1) => {
-  const base = (attack.power || 0) + (magic || 0) * 0.5;
+  const power = (attack.leveledPower ?? attack.power ?? 0);
+  const base  = power + (magic || 0) * 0.5;
   if (!base) return { dmg: 0, crit: false };
   const variance = 0.85 + Math.random() * 0.3;
   const crit = Math.random() < 0.12;
@@ -405,7 +408,7 @@ export default function DungeonPage() {
 
     let newMonsterHp = monsterHp;
     if (attack.tag === 'heal') {
-      const heal = attack.heal || 30;
+      const heal = (attack.leveledHeal ?? attack.heal ?? 30);
       setHp(prev => Math.min(maxHp, prev + heal));
       popDamage('player', heal, { heal: true });
       addLog(`💚 ${attack.name}: restored ${heal} HP.`);
@@ -416,27 +419,53 @@ export default function DungeonPage() {
       addLog(`🛡 ${attack.name}: bracing for impact.`);
       setPlayerAnim('');
     } else {
-      const mult = strengthBuff ? strengthBuff : 1;
+      // Defbreak: attacks against a target with active def-break deal +25% damage.
+      const defbreakBonus = (statuses.defbreak || 0) > 0 ? 1.25 : 1;
+      const mult = (strengthBuff ? strengthBuff : 1) * defbreakBonus;
       const { dmg, crit } = rollDamage(attack, loadout.magic, mult);
       setMonsterAnim('battle-monster-hurt');
       popDamage('monster', dmg, { crit });
       if (crit || ['heavy', 'shockwave', 'lightning'].includes(attack.animation)) shake();
       newMonsterHp = Math.max(0, monsterHp - dmg);
       setMonsterHp(newMonsterHp);
-      const buffStr = strengthBuff ? ' [TONIC]' : '';
+      const tags = [];
+      if (strengthBuff) tags.push('TONIC');
+      if (defbreakBonus > 1) tags.push('DEF-BREAK');
+      const buffStr = tags.length ? ` [${tags.join('+')}]` : '';
       addLog(`${attack.emoji} ${attack.name} hits ${monster.name} for ${dmg}${crit ? ' (CRIT!)' : ''}${buffStr}.`);
       if (strengthBuff) setStrengthBuff(null);
 
       // Apply status effects from this attack
       if (attack.tag === 'burn' && newMonsterHp > 0) {
-        setStatuses(s => ({ ...s, burn: 3 }));
-        addLog(`🔥 ${monster.name} is BURNING.`);
+        // Inferno (high-tier) burns longer and applies def-break too.
+        const isInferno = attack.id === 'inferno';
+        setStatuses(s => ({
+          ...s,
+          burn: Math.max(s.burn || 0, isInferno ? 5 : 3),
+          defbreak: Math.max(s.defbreak || 0, isInferno ? 4 : 2),
+        }));
+        addLog(`🔥 ${monster.name} is BURNING — defense weakened.`);
       } else if (attack.tag === 'poison' && newMonsterHp > 0) {
-        setStatuses(s => ({ ...s, poison: 3 }));
+        setStatuses(s => ({ ...s, poison: Math.max(s.poison || 0, 3) }));
         addLog(`☠️ ${monster.name} is POISONED.`);
       } else if (attack.tag === 'stun' && newMonsterHp > 0) {
-        setStatuses(s => ({ ...s, stun: 1 }));
+        setStatuses(s => ({ ...s, stun: Math.max(s.stun || 0, 1) }));
         addLog(`⚡ ${monster.name} is STUNNED — they'll lose their next turn.`);
+      } else if (attack.tag === 'chill' && newMonsterHp > 0) {
+        setStatuses(s => ({ ...s, chill: Math.max(s.chill || 0, 2) }));
+        addLog(`❄️ ${monster.name} is CHILLED — their next strikes are weaker.`);
+      } else if (attack.tag === 'freeze' && newMonsterHp > 0) {
+        setStatuses(s => ({
+          ...s,
+          stun:  Math.max(s.stun  || 0, 2),
+          chill: Math.max(s.chill || 0, 3),
+        }));
+        addLog(`🧊 ${monster.name} is FROZEN SOLID.`);
+      } else if (attack.tag === 'defbreak' && newMonsterHp > 0) {
+        // Heavy: long defbreak, light: short.
+        const isHeavy = ['inferno', 'earthquake', 'void_lance', 'piercing_arrow'].includes(attack.id);
+        setStatuses(s => ({ ...s, defbreak: Math.max(s.defbreak || 0, isHeavy ? 4 : 2) }));
+        addLog(`💢 ${monster.name}'s armor cracks — defense broken.`);
       } else if (attack.tag === 'lifesteal') {
         const lifesteal = Math.round(dmg / 2);
         setHp(prev => Math.min(maxHp, prev + lifesteal));
@@ -447,6 +476,15 @@ export default function DungeonPage() {
       await sleep(550);
       setPlayerAnim('');
       setMonsterAnim('');
+    }
+
+    // ── Ollie cameo ──────────────────────────────────────────────
+    // ~4% chance per player turn for a wholesome non-event. He does nothing
+    // mechanically — just shows up, says hi, then leaves. No art on purpose.
+    if (Math.random() < 0.04) {
+      addLog('👋 Ollie appears, then disappears.');
+      flashBanner('Ollie appears, then disappears', '#a5b4fc', 1400);
+      await sleep(900);
     }
 
     // Pet companion auto-attack (after the player's attack, if monster still alive)
@@ -487,14 +525,16 @@ export default function DungeonPage() {
 
     setCooldowns(c => ({ ...(c || {}), [slotIdx]: attack.cooldown || 0 }));
 
-    // Apply status-effect ticks (burn/poison) at the start of monster's turn
+    // Apply status-effect ticks (burn/poison) at the start of monster's turn.
+    // Chill + defbreak tick down too but don't deal damage themselves — they
+    // just expire after their duration.
     let dotDmg = 0;
     const nextStatuses = { ...statuses };
     if ((nextStatuses.burn || 0) > 0) {
-      dotDmg += 6;
+      dotDmg += 8;
       nextStatuses.burn -= 1;
-      popDamage('monster', 6, {});
-      addLog(`🔥 Burn ticks: -6 HP.`);
+      popDamage('monster', 8, {});
+      addLog(`🔥 Burn ticks: -8 HP.`);
     }
     if ((nextStatuses.poison || 0) > 0) {
       dotDmg += 4;
@@ -502,6 +542,8 @@ export default function DungeonPage() {
       popDamage('monster', 4, {});
       addLog(`☠️ Poison ticks: -4 HP.`);
     }
+    if ((nextStatuses.chill    || 0) > 0) nextStatuses.chill    -= 1;
+    if ((nextStatuses.defbreak || 0) > 0) nextStatuses.defbreak -= 1;
     if (dotDmg > 0) {
       newMonsterHp = Math.max(0, newMonsterHp - dotDmg);
       setMonsterHp(newMonsterHp);
@@ -547,8 +589,11 @@ export default function DungeonPage() {
       setMonsterAnim('battle-monster-attack');
       await sleep(250);
       const intentPower = currentIntent.power;
-      const intentMultiplier = currentIntent.kind === 'heavy' ? 1 : 1; // power already baked in
       let dmg = monsterDamage({ ...monster, power: intentPower }, loadout.armor, defenseBuff || 1);
+      // CHILL: 30% reduction on incoming monster damage while active.
+      if ((nextStatuses.chill || 0) > 0) {
+        dmg = Math.round(dmg * 0.7);
+      }
       if (guarding) { dmg = Math.round(dmg * 0.4); setGuarding(false); }
       if (defenseBuff && defenseBuff !== 0.4) { setDefenseBuff(null); }
       setPlayerAnim('battle-player-hurt');
@@ -641,10 +686,19 @@ export default function DungeonPage() {
   if (editingLoadout) {
     return <LoadoutEditor
       loadout={loadout}
+      userGold={user?.gold || 0}
       onSave={async (slots) => {
         await api.dungeon.saveLoadout(slots);
         await loadAll();
         setEditingLoadout(false);
+      }}
+      onUpgrade={async (attackId) => {
+        try { await api.dungeon.upgradeAttack(attackId); await loadAll(); await refreshUser(); }
+        catch (err) { addLog('⚠ ' + err.message); }
+      }}
+      onLearn={async (attackId) => {
+        try { await api.dungeon.learnAttack(attackId); await loadAll(); await refreshUser(); }
+        catch (err) { addLog('⚠ ' + err.message); }
       }}
       onCancel={() => setEditingLoadout(false)}
     />;
@@ -804,7 +858,7 @@ export default function DungeonPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 32 }}>
         <RunHeader />
 
-        <div className={`dungeon-stage ${stageShake ? 'battle-shake' : ''} ${isBoss ? 'boss-room' : ''}`} style={{
+        <div className={`dungeon-stage stage-tier-${monster.tier || 1} ${stageShake ? 'battle-shake' : ''} ${isBoss ? 'boss-room' : ''}`} style={{
           padding: 0, position: 'relative', minHeight: 320,
         }}>
           {/* Stone floor at the bottom of the stage. */}
@@ -842,8 +896,8 @@ export default function DungeonPage() {
                 </div>
                 <HpBar value={monsterHp} max={monster.hp} color={isBoss ? '#fbbf24' : isElite ? '#fb923c' : '#ef4444'} />
                 {/* Active status effects on the monster */}
-                {(statuses.burn > 0 || statuses.poison > 0 || statuses.stun > 0) && (
-                  <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 4 }}>
+                {(statuses.burn > 0 || statuses.poison > 0 || statuses.stun > 0 || statuses.chill > 0 || statuses.defbreak > 0) && (
+                  <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 4, flexWrap: 'wrap' }}>
                     {statuses.burn > 0 && (
                       <span className="status-icon" style={{ fontSize: 14, padding: '2px 6px', background: 'rgba(249,115,22,0.2)', border: '1px solid #ea580c', borderRadius: 6 }}>
                         🔥 {statuses.burn}
@@ -857,6 +911,16 @@ export default function DungeonPage() {
                     {statuses.stun > 0 && (
                       <span className="status-icon" style={{ fontSize: 14, padding: '2px 6px', background: 'rgba(253,224,71,0.2)', border: '1px solid #fde047', borderRadius: 6 }}>
                         ⚡ STUN
+                      </span>
+                    )}
+                    {statuses.chill > 0 && (
+                      <span className="status-icon" style={{ fontSize: 14, padding: '2px 6px', background: 'rgba(103,232,249,0.2)', border: '1px solid #22d3ee', borderRadius: 6 }}>
+                        ❄️ {statuses.chill}
+                      </span>
+                    )}
+                    {statuses.defbreak > 0 && (
+                      <span className="status-icon" style={{ fontSize: 14, padding: '2px 6px', background: 'rgba(244,114,182,0.2)', border: '1px solid #ec4899', borderRadius: 6 }}>
+                        💢 {statuses.defbreak}
                       </span>
                     )}
                   </div>
@@ -1307,12 +1371,14 @@ function MapView({ map, cleared, position, nextIds, onPick }) {
   );
 }
 
-function LoadoutEditor({ loadout, onSave, onCancel }) {
+function LoadoutEditor({ loadout, userGold, onSave, onUpgrade, onLearn, onCancel }) {
   const [slots, setSlots] = useState(loadout.slots);
   const [pickerSlot, setPickerSlot] = useState(null);
 
   const pickAttack = (id) => {
     if (pickerSlot === null) return;
+    const a = loadout.available.find(x => x.id === id);
+    if (a?.locked) return; // locked attacks can't be slotted
     const newSlots = [...slots];
     newSlots[pickerSlot] = id;
     setSlots(newSlots);
@@ -1325,6 +1391,8 @@ function LoadoutEditor({ loadout, onSave, onCancel }) {
         <h2 style={{ fontFamily: 'Cinzel,serif', fontSize: 18, marginBottom: 4 }}>Edit Loadout</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>
           Pick 4 attacks. Available moves depend on your equipped weapon ({loadout.weaponClass || 'unarmed'}).
+          Spend gold to upgrade attacks (boosts damage/heal) or learn new ones.
+          {' '}<span style={{ color: 'var(--gold)' }}>🪙 {userGold.toLocaleString()}</span>
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
@@ -1340,6 +1408,9 @@ function LoadoutEditor({ loadout, onSave, onCancel }) {
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Slot {i + 1}</div>
                 <div style={{ fontSize: 22, margin: '4px 0' }}>{a?.emoji || '➕'}</div>
                 <div style={{ fontSize: 11, fontWeight: 600 }}>{a?.name || 'Empty'}</div>
+                {a && (a.level || 1) > 1 && (
+                  <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 2 }}>Lv {a.level}</div>
+                )}
               </button>
             );
           })}
@@ -1350,22 +1421,60 @@ function LoadoutEditor({ loadout, onSave, onCancel }) {
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
               Pick an attack for slot {pickerSlot + 1}:
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
               {loadout.available.map(a => {
                 const isSelected = slots[pickerSlot] === a.id;
+                const level   = a.level || 1;
+                const maxed   = level >= (a.maxLevel || 5);
+                const upCost  = a.nextUpgradeCost;
+                const power   = a.leveledPower ?? a.power;
+                const heal    = a.leveledHeal  ?? a.heal;
                 return (
-                  <button key={a.id} onClick={() => pickAttack(a.id)} style={{
+                  <div key={a.id} style={{
                     background: isSelected ? 'rgba(99,102,241,0.18)' : 'var(--bg2)',
-                    border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
-                    borderRadius: 8, padding: 8, textAlign: 'left',
-                    color: 'var(--text)', cursor: 'pointer',
+                    border: `1px solid ${isSelected ? 'var(--accent)' : a.locked ? '#a16207' : 'var(--border)'}`,
+                    borderRadius: 8, padding: 8, color: 'var(--text)',
+                    opacity: a.locked ? 0.85 : 1,
                   }}>
-                    <div style={{ fontSize: 16, marginBottom: 2 }}>{a.emoji} <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span></div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{a.desc}</div>
-                    <div style={{ fontSize: 10, color: '#a78bfa', marginTop: 2 }}>
-                      {a.tag === 'heal' ? `+${a.heal} HP` : `${a.power} dmg`}{a.cooldown ? ` · CD ${a.cooldown}` : ''}
+                    <button onClick={() => pickAttack(a.id)}
+                      disabled={a.locked}
+                      style={{
+                        background: 'transparent', border: 'none', padding: 0,
+                        textAlign: 'left', color: 'inherit',
+                        cursor: a.locked ? 'not-allowed' : 'pointer', width: '100%',
+                      }}>
+                      <div style={{ fontSize: 16, marginBottom: 2 }}>
+                        {a.locked && <span style={{ color: '#fbbf24' }}>🔒 </span>}
+                        {a.emoji} <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
+                        {level > 1 && (
+                          <span style={{ fontSize: 10, color: '#fbbf24', marginLeft: 6 }}>Lv {level}</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{a.desc}</div>
+                      <div style={{ fontSize: 10, color: '#a78bfa', marginTop: 2 }}>
+                        {a.tag === 'heal' ? `+${heal} HP` : `${power} dmg`}{a.cooldown ? ` · CD ${a.cooldown}` : ''}
+                      </div>
+                    </button>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      {a.locked ? (
+                        <button className="btn btn-gold"
+                          disabled={userGold < a.learnCost}
+                          onClick={() => onLearn(a.id)}
+                          style={{ flex: 1, fontSize: 11, padding: '5px 8px' }}>
+                          Learn · 🪙 {a.learnCost}
+                        </button>
+                      ) : maxed ? (
+                        <span style={{ flex: 1, fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>MAX LEVEL</span>
+                      ) : (
+                        <button className="btn btn-ghost"
+                          disabled={!upCost || userGold < upCost}
+                          onClick={() => onUpgrade(a.id)}
+                          style={{ flex: 1, fontSize: 11, padding: '5px 8px', color: 'var(--gold)' }}>
+                          Upgrade → Lv {level + 1} · 🪙 {upCost}
+                        </button>
+                      )}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

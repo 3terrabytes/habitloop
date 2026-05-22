@@ -104,13 +104,50 @@ input {
   100% { transform: scale(1) translateY(0); }
 }
 
-.pet { transform-box: fill-box; transform-origin: center; }
-.pet-pet_cat     { animation: pet-cat-sway     2s   steps(2, end) infinite; }
-.pet-pet_fox     { animation: pet-fox-bounce   0.6s steps(2, end) infinite; }
-.pet-pet_owl     { animation: pet-owl-bob      3s   steps(2, end) infinite; }
-.pet-pet_dragon  { animation: pet-dragon-hover 1.5s ease-in-out  infinite; }
+/* New pet motions: tail-flick (cat), pounce (fox), wing-flap (owl), wingbeat
+   (dragon), and frog-hop. Combined with the existing idle bobs they make pets
+   feel alive instead of static-with-a-bob. */
+@keyframes pet-cat-tail {
+  0%, 100% { transform: translateX(0)    rotate(0); }
+  25%      { transform: translateX(-1px) rotate(-2deg); }
+  75%      { transform: translateX(1px)  rotate(2deg); }
+}
+@keyframes pet-fox-pounce {
+  0%, 100% { transform: translateY(0)    scaleY(1); }
+  40%      { transform: translateY(-1px) scaleY(0.92); }
+  55%      { transform: translateY(-5px) scaleY(1.06); }
+  75%      { transform: translateY(-2px) scaleY(0.98); }
+}
+@keyframes pet-owl-flap {
+  0%, 100% { transform: translateY(-1px) scaleX(1); }
+  50%      { transform: translateY(-3px) scaleX(1.06); }
+}
+@keyframes pet-dragon-beat {
+  0%, 100% { transform: translateY(-1px) scale(1);    filter: drop-shadow(0 0 1px rgba(245,158,11,0.5)); }
+  50%      { transform: translateY(-4px) scale(1.04); filter: drop-shadow(0 0 6px rgba(245,158,11,0.9)); }
+}
+@keyframes pet-frog-hop {
+  0%, 60%, 100% { transform: translateY(0); }
+  70%           { transform: translateY(-6px) scaleY(0.92); }
+  85%           { transform: translateY(-1px) scaleY(1.04); }
+}
+@keyframes pet-sparkle {
+  0%, 100% { opacity: 0;   transform: translateY(0);    }
+  50%      { opacity: 0.9; transform: translateY(-2px); }
+}
+
+.pet { transform-box: fill-box; transform-origin: center; position: relative; }
+.pet-pet_cat     { animation: pet-cat-tail     1.6s ease-in-out infinite; }
+.pet-pet_fox     { animation: pet-fox-pounce   1.2s ease-in-out infinite; }
+.pet-pet_owl     { animation: pet-owl-flap     0.7s ease-in-out infinite; }
+.pet-pet_dragon  { animation: pet-dragon-beat  1.4s ease-in-out infinite; }
+.pet-pet_frog    { animation: pet-frog-hop     2.2s ease-in-out infinite; }
+
 /* One-shot cheer overlays on top of the idle animation. */
 .pet.pet-cheer   { animation: pet-cheer-pop 0.6s ease-out; }
+
+/* Sparkle accent — applied to a small dot in the SVG for rare+ pets. */
+.pet-sparkle     { animation: pet-sparkle 1.8s ease-in-out infinite; }
 
 .card {
   background: var(--bg2);
@@ -460,6 +497,62 @@ input {
 @keyframes boss-room-pulse {
   0%, 100% { box-shadow: inset 0 0 80px rgba(239,68,68,0.25); }
   50%      { box-shadow: inset 0 0 140px rgba(239,68,68,0.55); }
+}
+
+/* ── Tier-specific battle backgrounds ────────────────────────────────────
+   Each monster tier (1-5) gets its own atmosphere via background overrides.
+   Tier 1 = mossy entrance, tier 2 = bone catacombs, tier 3 = volcanic depths,
+   tier 4 = crystal cavern, tier 5 = abyssal throne. Tier 5 is overridden again
+   by .boss-room when a true boss fight is active. */
+.dungeon-stage.stage-tier-1 {
+  background:
+    radial-gradient(ellipse at 50% 80%, transparent 30%, rgba(0,0,0,0.55) 100%),
+    repeating-linear-gradient(90deg, transparent 0 60px, rgba(0,0,0,0.22) 60px 70px, transparent 70px 130px),
+    radial-gradient(ellipse at 50% 30%, rgba(34,197,94,0.18) 0%, transparent 60%),
+    linear-gradient(180deg, #0e1f17 0%, #16322a 45%, #06120c 100%);
+  border-color: #1f4d34;
+}
+.dungeon-stage.stage-tier-2 {
+  background:
+    radial-gradient(ellipse at 50% 80%, transparent 30%, rgba(0,0,0,0.6) 100%),
+    repeating-linear-gradient(90deg, transparent 0 60px, rgba(0,0,0,0.28) 60px 72px, transparent 72px 140px),
+    radial-gradient(ellipse at 50% 30%, rgba(148,163,184,0.18) 0%, transparent 60%),
+    linear-gradient(180deg, #161620 0%, #20202c 45%, #0a0a12 100%);
+  border-color: #3a3a4a;
+}
+.dungeon-stage.stage-tier-3 {
+  background:
+    radial-gradient(ellipse at 50% 80%, transparent 30%, rgba(0,0,0,0.6) 100%),
+    repeating-linear-gradient(90deg, transparent 0 60px, rgba(0,0,0,0.3) 60px 72px, transparent 72px 140px),
+    radial-gradient(ellipse at 50% 35%, rgba(249,115,22,0.28) 0%, transparent 60%),
+    linear-gradient(180deg, #2a0e07 0%, #3a1408 45%, #150403 100%);
+  border-color: #b45309;
+  animation: tier3-flicker 4s ease-in-out infinite;
+}
+@keyframes tier3-flicker {
+  0%, 100% { box-shadow: inset 0 0 90px rgba(249,115,22,0.20); }
+  50%      { box-shadow: inset 0 0 160px rgba(249,115,22,0.40); }
+}
+.dungeon-stage.stage-tier-4 {
+  background:
+    radial-gradient(ellipse at 50% 80%, transparent 30%, rgba(0,0,0,0.6) 100%),
+    repeating-linear-gradient(90deg, transparent 0 60px, rgba(0,0,0,0.28) 60px 72px, transparent 72px 140px),
+    radial-gradient(ellipse at 50% 30%, rgba(99,102,241,0.32) 0%, transparent 60%),
+    linear-gradient(180deg, #0d1130 0%, #161a44 45%, #050720 100%);
+  border-color: #6366f1;
+  animation: tier4-pulse 6s ease-in-out infinite;
+}
+@keyframes tier4-pulse {
+  0%, 100% { box-shadow: inset 0 0 100px rgba(99,102,241,0.25); }
+  50%      { box-shadow: inset 0 0 170px rgba(167,139,250,0.45); }
+}
+.dungeon-stage.stage-tier-5 {
+  background:
+    radial-gradient(ellipse at 50% 80%, transparent 30%, rgba(0,0,0,0.7) 100%),
+    repeating-linear-gradient(90deg, transparent 0 60px, rgba(0,0,0,0.32) 60px 74px, transparent 74px 140px),
+    radial-gradient(ellipse at 50% 30%, rgba(245,197,66,0.30) 0%, transparent 60%),
+    linear-gradient(180deg, #1a1310 0%, #2a1f15 45%, #0a0604 100%);
+  border-color: #f5c542;
 }
 
 /* Stone floor — a brick-pattern band at the bottom of the stage. */
