@@ -150,7 +150,7 @@ const initDB = async () => {
     );
 
     -- Attacks the user has paid to learn. Only relevant for attacks whose
-    -- data file lists a `learnCost`. Free attacks are usable without an entry.
+    -- data file lists a learnCost. Free attacks are usable without an entry.
     CREATE TABLE IF NOT EXISTS user_unlocked_attacks (
       user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
       attack_id   VARCHAR(40) NOT NULL,
