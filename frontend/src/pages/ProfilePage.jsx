@@ -37,10 +37,8 @@ export default function ProfilePage() {
     <div style={{ minHeight:'100vh', background:'var(--bg)', padding:'24px 20px' }}>
       <div style={{ maxWidth:640, margin:'0 auto', display:'flex', flexDirection:'column', gap:16 }}>
 
-        {/* Back link */}
         <Link to="/" style={{ color:'var(--text-muted)', fontSize:13, textDecoration:'none', display:'flex', alignItems:'center', gap:4 }}>← Tickd</Link>
 
-        {/* Profile header */}
         <div className="card" style={{ padding:0, overflow:'hidden', position:'relative' }}>
           {banner && <div style={{ position:'absolute', top:0, left:0, right:0, height:60, background:banner.color, opacity:0.25 }}/>}
           <div style={{ display:'flex', gap:20, padding:24, position:'relative', zIndex:1 }}>
@@ -67,14 +65,15 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Stats strip */}
+          {/* Dungeon stats strip */}
           <div style={{ display:'flex', borderTop:'1px solid var(--border)' }}>
             {[
-              { icon:'🔥', label:'Best Streak', val: profile.best_streak != null ? `${profile.best_streak}d` : '🔒' },
-              { icon:'📋', label:'Habits',      val: profile.habits?.length > 0 ? profile.habits.length : (profile.habits?.length === 0 && profile.isFriend !== undefined ? '🔒' : 0) },
-              { icon:'📅', label:'Member Since',val: new Date(profile.member_since).toLocaleDateString('en-GB', { month:'short', year:'numeric' }) },
+              { icon:'⚔️', label:'Ascension',  val: profile.dungeon_ascension ?? 0 },
+              { icon:'🌊', label:'Best Wave',  val: profile.best_survival_wave ?? 0 },
+              { icon:'🪙', label:'Lifetime Gold', val: Number(profile.lifetime_gold || 0).toLocaleString() },
+              { icon:'📅', label:'Member Since', val: profile.member_since ? new Date(profile.member_since).toLocaleDateString('en-GB', { month:'short', year:'numeric' }) : '—' },
             ].map((s,i) => (
-              <div key={i} style={{ flex:1, padding:'14px 8px', textAlign:'center', borderRight: i<2 ? '1px solid var(--border)':'' }}>
+              <div key={i} style={{ flex:1, padding:'14px 8px', textAlign:'center', borderRight: i<3 ? '1px solid var(--border)':'' }}>
                 <div style={{ fontSize:18, marginBottom:2 }}>{s.icon}</div>
                 <div style={{ fontWeight:700, fontSize:15 }}>{s.val}</div>
                 <div style={{ fontSize:11, color:'var(--text-muted)' }}>{s.label}</div>
@@ -83,7 +82,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Gear */}
         {gear.length > 0 && (
           <div className="card" style={{ padding:16 }}>
             <h3 style={{ fontFamily:'Cinzel,serif', fontSize:13, color:'var(--text-muted)', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Equipment</h3>
@@ -100,117 +98,7 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
-
-        {/* Activity heatmap */}
-        {profile.heatmap && profile.heatmap.length > 0 && (
-          <div className="card" style={{ padding:20 }}>
-            <h3 style={{ fontFamily:'Cinzel,serif', fontSize:13, color:'var(--text-muted)', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Activity (Last 90 Days)</h3>
-            <Heatmap data={profile.heatmap} habits={profile.habits||[]}/>
-          </div>
-        )}
-
-        {/* 28-day streak calendar */}
-        {profile.completed_days != null && (
-          <div className="card" style={{ padding:20 }}>
-            <h3 style={{ fontFamily:'Cinzel,serif', fontSize:13, color:'var(--text-muted)', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Streak Calendar (Last 28 Days)</h3>
-            <StreakCalendar completedDays={profile.completed_days} />
-          </div>
-        )}
-
-        {/* Habits */}
-        {profile.habits && profile.habits.length > 0 && (
-          <div className="card" style={{ padding:20 }}>
-            <h3 style={{ fontFamily:'Cinzel,serif', fontSize:13, color:'var(--text-muted)', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Habits</h3>
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {profile.habits.map(h => (
-                <div key={h.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:'var(--bg3)', borderRadius:10, border:'1px solid var(--border)' }}>
-                  <div style={{ width:36, height:36, borderRadius:'50%', background:h.color||'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>{h.icon}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, fontSize:14 }}>{h.name}</div>
-                    <div style={{ fontSize:12, color:'var(--text-muted)' }}>{h.total_completions} completions · Best: {h.best_streak}d</div>
-                  </div>
-                  <div style={{ textAlign:'right' }}>
-                    <div style={{ color:'#f59e0b', fontWeight:700, fontSize:14 }}>🔥{h.streak}</div>
-                    <div style={{ fontSize:11, color:'var(--text-muted)' }}>streak</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Private notice */}
-        {profile.habits && profile.habits.length === 0 && !profile.isSelf && (
-          <div className="card" style={{ padding:24, textAlign:'center' }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>🔒</div>
-            <p style={{ color:'var(--text-muted)', fontSize:14 }}>This user's habits are private.</p>
-          </div>
-        )}
       </div>
-    </div>
-  );
-}
-
-function StreakCalendar({ completedDays = [] }) {
-  const today = new Date();
-  const days = [];
-  for (let i = 27; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const iso = d.toISOString().slice(0, 10);
-    days.push({ iso, label: d.toLocaleDateString('en-GB', { day:'numeric', month:'short' }) });
-  }
-  const done = new Set(completedDays.map(d => d.slice(0, 10)));
-  return (
-    <div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-        {days.map(({ iso, label }) => (
-          <div key={iso} title={label} style={{
-            width:22, height:22, borderRadius:5,
-            background: done.has(iso) ? 'var(--green)' : 'var(--bg3)',
-            border:`1px solid ${done.has(iso) ? 'var(--green)' : 'var(--border)'}`,
-            opacity: done.has(iso) ? 1 : 0.45,
-          }}/>
-        ))}
-      </div>
-      <div style={{ display:'flex', gap:12, marginTop:8, fontSize:11, color:'var(--text-muted)' }}>
-        <span style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <span style={{ width:10, height:10, borderRadius:2, background:'var(--green)', display:'inline-block' }}/>Completed
-        </span>
-        <span style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <span style={{ width:10, height:10, borderRadius:2, background:'var(--bg3)', border:'1px solid var(--border)', display:'inline-block' }}/>Missed
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Heatmap({ data, habits }) {
-  const maxCount = habits.length || 1;
-  const byDate = {};
-  data.forEach(d => { byDate[d.completed_date?.split('T')[0]] = Number(d.count); });
-
-  const days = [];
-  for (let i = 89; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().split('T')[0];
-    days.push({ key, count: byDate[key] || 0 });
-  }
-
-  return (
-    <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
-      {days.map(d => {
-        const pct = d.count / maxCount;
-        const bg = d.count === 0 ? 'var(--bg3)'
-          : pct >= 0.8 ? 'var(--accent)'
-          : pct >= 0.5 ? 'var(--accent)88'
-          : 'var(--accent)44';
-        return (
-          <div key={d.key} title={`${d.key}: ${d.count}/${maxCount}`}
-            style={{ width:10, height:10, borderRadius:2, background:bg, cursor:'default' }}/>
-        );
-      })}
     </div>
   );
 }

@@ -48,7 +48,7 @@ export default function AuthPage() {
         <div style={styles.logo}>
           <div style={styles.logoIcon}>⚔️</div>
           <h1 style={styles.title}>Tickd</h1>
-          <p style={styles.sub}>Level up your life, one habit at a time</p>
+          <p style={styles.sub}>Descend. Slay. Ascend.</p>
         </div>
 
         <div style={styles.tabs}>

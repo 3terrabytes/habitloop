@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 
 const DEBRIEF_VERSION = 'features-1';
 const FEATURES = [
-  { icon: '🐱', title: 'Animated Companions', desc: 'Your pets now sway, bounce, bob, and hover with idle animations. They cheer when you complete habits!' },
-  { icon: '👗', title: 'Try On Items', desc: 'Preview how weapons, armor, banners, and more look on your avatar before buying or equipping.' },
-  { icon: '🏆', title: 'Achievements', desc: '23 achievements to unlock across streaks, levels, wealth, and social milestones. See them in Trophies.' },
-  { icon: '📊', title: 'Stats Page', desc: 'Track your progress with daily XP bars, a 90-day completion heatmap, and weekday breakdowns.' },
+  { icon: '🐱', title: 'Animated Companions', desc: 'Your pets now sway, bounce, bob, and hover with idle animations. They cheer when you slay a foe!' },
+  { icon: '👗', title: 'Try On Items',        desc: 'Preview how weapons, armor, banners, and more look on your avatar before buying or equipping.' },
+  { icon: '🏆', title: 'Achievements',        desc: 'Unlock trophies across dungeon ascensions, survival waves, levels, wealth, and social milestones.' },
+  { icon: '📊', title: 'Stats Page',          desc: 'Track your progression, dungeon ascension, best wave, and collection completion.' },
 ];
 
 export default function FeaturesDebreifModal() {

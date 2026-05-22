@@ -50,13 +50,6 @@ export const api = {
       return req('GET', `/admin/logs${qs ? '?' + qs : ''}`);
     },
   },
-  habits: {
-    list: () => req('GET', '/habits'),
-    create: (b) => req('POST', '/habits', b),
-    delete: (id) => req('DELETE', `/habits/${id}`),
-    complete: (id) => req('POST', `/habits/${id}/complete`),
-    uncomplete: (id) => req('DELETE', `/habits/${id}/complete`),
-  },
   friends: {
     list: () => req('GET', '/friends'),
     all: (q) => req('GET', `/friends/all${q ? `?q=${encodeURIComponent(q)}` : ''}`),

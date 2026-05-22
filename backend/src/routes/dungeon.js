@@ -310,7 +310,6 @@ router.post('/treasure', async (req, res) => {
   try {
     const { tier } = req.body;
     const t = Math.max(1, Math.min(5, parseInt(tier) || 1));
-    // Dungeon is a gold faucet by design — habits are still the XP grind.
     const goldBase = 40 + t * 25 + Math.floor(Math.random() * 20);
     const goldRes = await addGold(req.userId, goldBase);
     const granted = goldRes?.granted ?? goldBase;

@@ -210,7 +210,6 @@ export default function AvatarPage() {
       const res = await api.avatar.use(item.id);
       const msg = res.xpGained ? `+${res.xpGained} XP!`
         : res.goldGained ? `+${res.goldGained} gold!`
-        : res.shieldActive ? 'Streak Shield active!'
         : res.message || 'Used!';
       showToast(`${item.name}: ${msg}`);
       await load();

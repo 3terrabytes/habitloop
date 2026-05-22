@@ -88,10 +88,10 @@ router.post('/login', async (req, res) => {
 router.get('/me', require('../middleware/auth'), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, email, xp, level, avatar_color, gold, avatar_skin, avatar_hair,
-              avatar_eyes, avatar_hair_style, avatar_gender, avatar_beard, streak_shield,
-              debrief_seen, created_at, is_admin, is_master_admin, admin_perms, dungeon_ascension,
-              best_survival_wave, rebirth_count,
+      `SELECT id, username, email, xp, level, avatar_color, gold, lifetime_gold,
+              avatar_skin, avatar_hair, avatar_eyes, avatar_hair_style, avatar_gender, avatar_beard,
+              debrief_seen, created_at, is_admin, is_master_admin, admin_perms,
+              dungeon_ascension, best_survival_wave, rebirth_count,
               suspension_type, suspension_reason, suspended_until, suspended_at, warning_seen
        FROM users WHERE id = $1`,
       [req.userId]
@@ -183,8 +183,7 @@ router.patch('/debrief-seen', require('../middleware/auth'), async (req, res) =>
 
 // Rebirth — wipes XP/level/gold/inventory/equipped/dungeon-progress and
 // bumps rebirth_count. Earnings multiplier becomes 1.5x / 2.0x / 2.5x ...
-// Habits and friendships survive; achievements survive too (they reflect
-// permanent milestones across lives).
+// Friendships and achievements survive across lives.
 router.post('/rebirth', require('../middleware/auth'), async (req, res) => {
   const client = await pool.connect();
   try {
@@ -202,7 +201,7 @@ router.post('/rebirth', require('../middleware/auth'), async (req, res) => {
 
     const newRebirthCount = (me.rebirth_count || 0) + 1;
 
-    // Wipe progression-tied state. Achievements + friendships + habits stay.
+    // Wipe progression-tied state. Achievements + friendships stay.
     await client.query('DELETE FROM user_inventory WHERE user_id = $1', [req.userId]);
     await client.query('DELETE FROM user_equipped  WHERE user_id = $1', [req.userId]);
     await client.query('DELETE FROM user_attacks   WHERE user_id = $1', [req.userId]);
@@ -212,8 +211,7 @@ router.post('/rebirth', require('../middleware/auth'), async (req, res) => {
          lifetime_gold = 0,
          rebirth_count = $1,
          dungeon_ascension = 0,
-         best_survival_wave = 0,
-         streak_shield = false
+         best_survival_wave = 0
        WHERE id = $2`,
       [newRebirthCount, req.userId]
     );

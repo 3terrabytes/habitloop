@@ -24,14 +24,14 @@ function startScheduler(notifTime) {
     const now = new Date();
     const [h, m] = notifTime.split(':').map(Number);
     if (now.getHours() === h && now.getMinutes() === m) {
-      showHabitReminder();
+      showDungeonReminder();
     }
   }, NOTIF_CHECK_INTERVAL);
 }
 
-function showHabitReminder() {
-  self.registration.showNotification('Tickd Reminder 🔥', {
-    body: "Don't forget to check off your habits today!",
+function showDungeonReminder() {
+  self.registration.showNotification('Tickd Reminder ⚔️', {
+    body: 'The dungeon awaits. Descend and earn your gold today!',
     icon: '/favicon.ico',
     badge: '/favicon.ico',
     tag: 'tickd-daily-reminder',
@@ -53,7 +53,7 @@ self.addEventListener('notificationclick', event => {
 
 // Push event (for server-sent pushes if implemented later)
 self.addEventListener('push', event => {
-  const data = event.data?.json() || { title: 'Tickd', body: 'Time to check your habits!' };
+  const data = event.data?.json() || { title: 'Tickd', body: 'The dungeon awaits!' };
   event.waitUntil(
     self.registration.showNotification(data.title || 'Tickd 🔥', {
       body: data.body,

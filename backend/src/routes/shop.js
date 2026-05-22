@@ -236,9 +236,6 @@ router.post('/use/:itemId', async (req, res) => {
   } else if (item.id === 'elixir_gold') {
     const g = await addGold(req.userId, 1000);
     result = { goldGained: g?.granted ?? 1000 };
-  } else if (item.id === 'scroll_streak') {
-    await pool.query('UPDATE users SET streak_shield = true WHERE id = $1', [req.userId]);
-    result = { shieldActive: true };
   } else if (item.id === 'baguette_stale') {
     await addXP(req.userId, 1);
     result = { xpGained: 1, message: 'Stale, but somehow nutritious.' };

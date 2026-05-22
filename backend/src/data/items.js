@@ -69,7 +69,7 @@ const ITEMS = [
   { id: 'badge_void',      type: 'badge',  name: 'Void Badge',         rarity: 'legendary', cost: 1000, magic: 0,  emoji: '🌌',  desc: 'From beyond the stars.' },
 
   // COMPANIONS
-  { id: 'pet_cat',         type: 'companion', name: 'Habit Cat',       rarity: 'common',    cost: 120,  magic: 5,  emoji: '🐱',  desc: 'Meows judgementally if you miss a day.' },
+  { id: 'pet_cat',         type: 'companion', name: 'Dungeon Cat',     rarity: 'common',    cost: 120,  magic: 5,  emoji: '🐱',  desc: 'A loyal feline familiar that pads after you through the dungeon.' },
   { id: 'pet_fox',         type: 'companion', name: 'Spirit Fox',      rarity: 'rare',      cost: 350,  magic: 15, emoji: '🦊',  desc: 'Cunning and swift. Boosts your XP sense.' },
   { id: 'pet_owl',         type: 'companion', name: 'Wise Owl',        rarity: 'epic',      cost: 600,  magic: 28, emoji: '🦉',  desc: 'Ancient wisdom flows through it.' },
   { id: 'pet_dragon',      type: 'companion', name: 'Mini Dragon',     rarity: 'legendary', cost: 1800, magic: 50, emoji: '🐲',  desc: 'A legendary companion. Fiercely loyal.' },
@@ -77,7 +77,6 @@ const ITEMS = [
   // CONSUMABLES
   { id: 'baguette_stale',  type: 'consumable', name: 'Stale Baguette', rarity: 'common',    cost: 10,   magic: 0,  emoji: '🥖',  desc: 'A crusty baguette of mysterious origin. Somehow still here.' },
   { id: 'potion_xp',       type: 'consumable', name: 'XP Potion',      rarity: 'rare',      cost: 300,  magic: 0,  emoji: '🧪',  desc: 'Grants a burst of XP. Use wisely.' },
-  { id: 'scroll_streak',   type: 'consumable', name: 'Streak Scroll',  rarity: 'epic',      cost: 700,  magic: 0,  emoji: '📜',  desc: 'Protect your streak for one missed day.' },
   { id: 'elixir_gold',     type: 'consumable', name: 'Golden Elixir',  rarity: 'legendary', cost: 1100, magic: 0,  emoji: '✨',  desc: 'Transmutes hard work into pure gold XP.' },
 
   // TITLES
@@ -90,7 +89,7 @@ const ITEMS = [
   { id: 'armor_frog',      type: 'armor',     name: 'Frogskin Tunic',    rarity: 'rare', cost: 320, magic: 11, emoji: '🐸', desc: 'Slick, springy, and surprisingly waterproof.', theme: 'frog' },
   { id: 'banner_frog',     type: 'banner',    name: 'Lilypad Banner',    rarity: 'rare', cost: 300, magic: 0,  color: 'linear-gradient(90deg,#14532d,#22c55e,#86efac)', desc: 'Floats serenely above the pond.', theme: 'frog' },
   { id: 'badge_frog',      type: 'badge',     name: 'Frog Badge',        rarity: 'rare', cost: 300, magic: 0,  emoji: '🐸', desc: 'Hop to it.', theme: 'frog' },
-  { id: 'pet_frog',        type: 'companion', name: 'Pocket Frog',       rarity: 'rare', cost: 400, magic: 14, emoji: '🐸', desc: 'A loyal amphibian. Ribbits encouragement when you complete a habit.', theme: 'frog' },
+  { id: 'pet_frog',        type: 'companion', name: 'Pocket Frog',       rarity: 'rare', cost: 400, magic: 14, emoji: '🐸', desc: 'A loyal amphibian. Ribbits encouragement when you slay a foe.', theme: 'frog' },
   { id: 'potion_frog',     type: 'consumable',name: 'Pond Brew',         rarity: 'rare', cost: 320, magic: 0,  emoji: '🧪', desc: 'A bubbling green tonic. Tastes faintly of swamp. Grants a modest XP boost.', theme: 'frog' },
   { id: 'title_frog',      type: 'title',     name: '"The Frog Prince"', rarity: 'rare', cost: 350, magic: 0,  emoji: '🐸', desc: 'Royalty of the pond.', theme: 'frog' },
 

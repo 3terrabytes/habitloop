@@ -56,7 +56,8 @@ router.get('/:username', async (req, res) => {
   // Get profile user
   const { rows: userRows } = await pool.query(
     `SELECT id, username, xp, level, avatar_color, avatar_skin, avatar_hair, avatar_eyes,
-            avatar_hair_style, avatar_beard, privacy_xp, privacy_streaks, privacy_habits,
+            avatar_hair_style, avatar_beard, privacy_xp,
+            dungeon_ascension, best_survival_wave, lifetime_gold,
             created_at
      FROM users WHERE LOWER(username) = LOWER($1)`,
     [username]
@@ -86,46 +87,6 @@ router.get('/:username', async (req, res) => {
     badge:  eq.badge  ? itemById(eq.badge)  : null,
   };
 
-  // Habits (privacy controlled)
-  let habits = [];
-  if (canSee(u.privacy_habits, isSelf, isFriend)) {
-    const { rows } = await pool.query(
-      `SELECT id, name, icon, color, streak, best_streak, total_completions, created_at
-       FROM habits WHERE user_id = $1 ORDER BY streak DESC`,
-      [u.id]
-    );
-    habits = rows;
-  }
-
-  // Habit completion heatmap (last 90 days) — only if habits visible
-  let heatmap = [];
-  if (canSee(u.privacy_habits, isSelf, isFriend) && habits.length) {
-    const { rows } = await pool.query(
-      `SELECT completed_date, COUNT(*) AS count
-       FROM habit_logs
-       WHERE user_id = $1 AND completed_date >= NOW() - INTERVAL '90 days'
-       GROUP BY completed_date ORDER BY completed_date ASC`,
-      [u.id]
-    );
-    heatmap = rows;
-  }
-
-  // Best streak across all habits
-  const bestStreak = habits.reduce((m, h) => Math.max(m, h.best_streak || 0), 0);
-
-  // Completed days for streak calendar (last 28 days)
-  let completedDays = [];
-  if (canSee(u.privacy_habits, isSelf, isFriend)) {
-    const { rows: cdRows } = await pool.query(
-      `SELECT DISTINCT completed_date::text AS day
-       FROM habit_logs
-       WHERE user_id = $1 AND completed_date >= NOW() - INTERVAL '28 days'
-       ORDER BY day ASC`,
-      [u.id]
-    );
-    completedDays = cdRows.map(r => r.day);
-  }
-
   res.json({
     id: u.id,
     username: u.username,
@@ -137,10 +98,9 @@ router.get('/:username', async (req, res) => {
     avatar_hair_style: u.avatar_hair_style,
     avatar_beard:      u.avatar_beard,
     equipped,
-    habits:      canSee(u.privacy_habits, isSelf, isFriend) ? habits : [],
-    heatmap:     canSee(u.privacy_habits, isSelf, isFriend) ? heatmap : [],
-    completed_days: canSee(u.privacy_habits, isSelf, isFriend) ? completedDays : [],
-    best_streak: canSee(u.privacy_streaks, isSelf, isFriend) ? bestStreak : null,
+    dungeon_ascension:  u.dungeon_ascension,
+    best_survival_wave: u.best_survival_wave,
+    lifetime_gold:      u.lifetime_gold,
     member_since: u.created_at,
     isFriend,
     isSelf,

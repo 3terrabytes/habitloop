@@ -8,16 +8,6 @@ const levelFromXP = (xp) => {
   return level;
 };
 
-// XP earned for completing a habit (streak bonus)
-const calcXP = (streak) => {
-  const base = 10;
-  if (streak >= 30) return base + 25;
-  if (streak >= 14) return base + 15;
-  if (streak >= 7)  return base + 10;
-  if (streak >= 3)  return base + 5;
-  return base;
-};
-
 // Full L1-L100 title progression (kept in sync with frontend/src/utils/xp.js)
 const LEVEL_TITLES = [
   '',
@@ -104,4 +94,4 @@ const addGold = async (userId, amount) => {
   return { granted: rows[0].granted, gold: rows[0].gold };
 };
 
-module.exports = { xpForLevel, levelFromXP, calcXP, levelTitle, addXP, addGold, rebirthMult, LEVEL_REWARD_BANNERS };
+module.exports = { xpForLevel, levelFromXP, levelTitle, addXP, addGold, rebirthMult, LEVEL_REWARD_BANNERS };

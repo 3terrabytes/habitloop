@@ -12,7 +12,7 @@ const PRIVACY_OPTIONS = [
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const [settings, setSettings] = useState({
-    privacy_xp: 'all', privacy_streaks: 'all', privacy_habits: 'friends',
+    privacy_xp: 'all',
     notif_enabled: false, notif_time: '20:00', theme: 'default',
   });
   const [saving, setSaving] = useState(false);
@@ -110,9 +110,7 @@ export default function SettingsPage() {
       <Section title="ðŸ”’ Privacy">
         <p style={{ color:'var(--text-muted)', fontSize:13, marginBottom:14 }}>Control what others can see on your public profile.</p>
         {[
-          { key:'privacy_xp',      label:'XP & Level' },
-          { key:'privacy_streaks', label:'Streaks' },
-          { key:'privacy_habits',  label:'Habits & Activity' },
+          { key:'privacy_xp', label:'XP & Level' },
         ].map(({ key, label }) => (
           <div key={key} style={{ marginBottom:14 }}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{label}</div>
@@ -145,8 +143,8 @@ export default function SettingsPage() {
           <>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
               <div>
-                <div style={{ fontSize:14, fontWeight:600, marginBottom:2 }}>Daily Habit Reminder</div>
-                <div style={{ fontSize:12, color:'var(--text-muted)' }}>Get a push notification to check off your habits</div>
+                <div style={{ fontSize:14, fontWeight:600, marginBottom:2 }}>Daily Dungeon Reminder</div>
+                <div style={{ fontSize:12, color:'var(--text-muted)' }}>Get a push notification reminding you to descend into the dungeon</div>
               </div>
               <Toggle value={settings.notif_enabled} onChange={v => set('notif_enabled', v)}/>
             </div>
@@ -159,7 +157,7 @@ export default function SettingsPage() {
                   style={{ background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 14px', color:'var(--text)', fontSize:14, outline:'none' }}
                 />
                 <p style={{ color:'var(--text-muted)', fontSize:12, marginTop:6 }}>
-                  Notifications will appear daily at this time if your habits aren't all checked off.
+                  A reminder will appear daily at this time to keep your runs going.
                 </p>
               </div>
             )}
@@ -385,7 +383,7 @@ const fieldStyle = {
 };
 
 
-// -- Rebirth — Level 30 gate, wipes XP/level/gold/inventory/dungeon-state --
+// -- Rebirth ï¿½ Level 30 gate, wipes XP/level/gold/inventory/dungeon-state --
 function RebirthCard({ user, refreshUser, onToast }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy]             = useState(false);
@@ -419,17 +417,17 @@ function RebirthCard({ user, refreshUser, onToast }) {
         </div>
         <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '10px 12px' }}>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.06em', fontWeight: 600 }}>CURRENT MULTIPLIER</div>
-          <div style={{ fontFamily: 'Cinzel,serif', fontSize: 22, color: '#fde047' }}>{curMult.toFixed(1)}× XP &amp; Gold</div>
+          <div style={{ fontFamily: 'Cinzel,serif', fontSize: 22, color: '#fde047' }}>{curMult.toFixed(1)}ï¿½ XP &amp; Gold</div>
         </div>
       </div>
 
       <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 8 }}>
         Rebirth at <strong style={{ color: 'var(--text)' }}>Level 30</strong> to wipe your XP, level,
         gold, inventory, and dungeon progress in exchange for a permanent <strong style={{ color: '#fde047' }}>
-        +0.5× earnings multiplier</strong>. Habits, friends, and achievements survive.
+        +0.5Ã— earnings multiplier</strong>. Friends and achievements survive.
       </p>
       <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 14 }}>
-        Next rebirth would give you <strong style={{ color: '#fde047' }}>{nextMult.toFixed(1)}× XP &amp; gold</strong>.
+        Next rebirth would give you <strong style={{ color: '#fde047' }}>{nextMult.toFixed(1)}ï¿½ XP &amp; gold</strong>.
       </p>
 
       {!confirming ? (
@@ -445,7 +443,7 @@ function RebirthCard({ user, refreshUser, onToast }) {
             opacity: canRebirth ? 1 : 0.55,
           }}>
           {canRebirth
-            ? `? Rebirth (gain ${nextMult.toFixed(1)}× earnings)`
+            ? `? Rebirth (gain ${nextMult.toFixed(1)}ï¿½ earnings)`
             : `?? Reach Level 30 (${30 - level} to go)`}
         </button>
       ) : (
@@ -461,9 +459,8 @@ function RebirthCard({ user, refreshUser, onToast }) {
             <li>Resets XP to 0, level to 1, gold to 0.</li>
             <li>Deletes every item in your inventory and unequips everything.</li>
             <li>Resets dungeon ascension and best survival wave.</li>
-            <li>Streak shield is lost.</li>
-            <li>Habits, friends, and achievements <strong>stay</strong>.</li>
-            <li>Earnings multiplier becomes <strong style={{ color: '#fde047' }}>{nextMult.toFixed(1)}×</strong> permanently.</li>
+            <li>Friends and achievements <strong>stay</strong>.</li>
+            <li>Earnings multiplier becomes <strong style={{ color: '#fde047' }}>{nextMult.toFixed(1)}ï¿½</strong> permanently.</li>
           </ul>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost" onClick={() => setConfirming(false)}
@@ -473,7 +470,7 @@ function RebirthCard({ user, refreshUser, onToast }) {
             <button onClick={doRebirth} disabled={busy}
               className="btn btn-primary"
               style={{ padding: '8px 18px', fontSize: 13, background: '#7f1d1d', borderColor: '#ef4444' }}>
-              {busy ? 'Reborn…' : 'Yes, REBIRTH'}
+              {busy ? 'Rebornï¿½' : 'Yes, REBIRTH'}
             </button>
           </div>
         </div>

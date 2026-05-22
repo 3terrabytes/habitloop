@@ -6,416 +6,243 @@ import { levelTitle, xpForLevel } from '../utils/xp';
 import PixelCharacter from '../components/PixelCharacter';
 import BannerName from '../components/BannerName';
 
-const ICONS = ['⚡','🏃','📚','🧘','💪','🥗','💧','🎯','🧠','🌅','🎨','🎸','💻','🌿','❤️'];
-const COLORS = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ef4444','#06b6d4'];
+const RARITY_COLORS = { common: '#9ca3af', rare: '#3b82f6', epic: '#8b5cf6', legendary: '#f59e0b' };
+
+const SLOTS = [
+  { key: 'weapon',    label: 'Weapon',    fallback: '🗡' },
+  { key: 'armor',     label: 'Armor',     fallback: '🛡' },
+  { key: 'banner',    label: 'Banner',    fallback: '🏷' },
+  { key: 'badge',     label: 'Badge',     fallback: '🎖' },
+  { key: 'companion', label: 'Companion', fallback: '🐾' },
+  { key: 'title',     label: 'Title',     fallback: '📜' },
+];
 
 export default function Dashboard() {
-  const { user, refreshUser } = useAuth();
-  const [habits, setHabits] = useState([]);
+  const { user } = useAuth();
   const [equipped, setEquipped] = useState({});
-  const [showAdd, setShowAdd] = useState(false);
-  const [newHabit, setNewHabit] = useState({ name: '', icon: '⚡', color: '#6366f1' });
-  const [floats, setFloats] = useState([]); // XP float animations
-  const [levelUp, setLevelUp] = useState(null);
-  const [unlockedAchievements, setUnlockedAchievements] = useState([]);
-  const [petCheering, setPetCheering] = useState(false);
 
   const load = useCallback(async () => {
-    const [data, inv] = await Promise.all([api.habits.list(), api.avatar.inventory()]);
-    setHabits(data);
-    setEquipped(inv.equipped || {});
+    try {
+      const inv = await api.avatar.inventory();
+      setEquipped(inv?.equipped || {});
+    } catch {}
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const complete = async (habit) => {
-    if (habit.completed_today) {
-      await api.habits.uncomplete(habit.id);
-      await load(); await refreshUser();
-      return;
-    }
-    try {
-      const result = await api.habits.complete(habit.id);
-      // Spawn floating XP
-      const id = Date.now();
-      setFloats(f => [...f, { id, xp: result.xpEarned }]);
-      setTimeout(() => setFloats(f => f.filter(x => x.id !== id)), 1200);
-
-      // Pet celebrates — toggle on, then back off so the class can re-trigger next time
-      setPetCheering(false);
-      requestAnimationFrame(() => setPetCheering(true));
-      setTimeout(() => setPetCheering(false), 700);
-
-      if (result.leveledUp) {
-        setLevelUp(result.newLevel);
-        setTimeout(() => setLevelUp(null), 3000);
-      }
-
-      if (result.newAchievements && result.newAchievements.length) {
-        setUnlockedAchievements(prev => [...prev, ...result.newAchievements]);
-        result.newAchievements.forEach((_, i) => {
-          setTimeout(() => {
-            setUnlockedAchievements(prev => prev.slice(1));
-          }, 5000 + i * 600);
-        });
-      }
-
-      await load(); await refreshUser();
-    } catch {}
-  };
-
-  const addHabit = async (e) => {
-    e.preventDefault();
-    if (!newHabit.name.trim()) return;
-    await api.habits.create(newHabit);
-    setNewHabit({ name: '', icon: '⚡', color: '#6366f1' });
-    setShowAdd(false);
-    await load();
-  };
-
-  const deleteHabit = async (id) => {
-    if (!window.confirm('Remove this habit?')) return;
-    await api.habits.delete(id);
-    await load();
-  };
-
-  const completedCount = habits.filter(h => h.completed_today).length;
-  const currentXP = user?.xp || 0;
+  const currentXP    = user?.xp || 0;
   const currentLevel = user?.level || 1;
-  const nextLevelXP = xpForLevel(currentLevel + 1);
-  const prevLevelXP = xpForLevel(currentLevel);
-  const xpProgress = Math.min(((currentXP - prevLevelXP) / (nextLevelXP - prevLevelXP)) * 100, 100);
+  const nextLevelXP  = xpForLevel(currentLevel + 1);
+  const prevLevelXP  = xpForLevel(currentLevel);
+  const xpProgress   = Math.min(((currentXP - prevLevelXP) / (nextLevelXP - prevLevelXP)) * 100, 100);
+  const rebirthMult  = 1 + 0.5 * (user?.rebirth_count || 0);
 
   return (
     <div style={styles.wrap}>
-      {/* Level up banner */}
-      {levelUp && (
-        <div style={styles.levelUpBanner} className="animate-fade">
-          🎉 LEVEL UP! You are now Level {levelUp} — {levelTitle(levelUp)}!
+      {/* ── AVATAR SHOWCASE ─────────────────────────────────────── */}
+      <div className="card" style={styles.avatarCard}>
+        <div style={styles.avatarFrame}>
+          <PixelCharacter
+            equipped={equipped}
+            appearance={user || {}}
+            size={260}
+          />
         </div>
-      )}
 
-      {/* XP floats */}
-      {floats.map(f => (
-        <div key={f.id} style={styles.xpFloat}>+{f.xp} XP</div>
-      ))}
-
-      {/* Achievement unlocked toasts */}
-      <div style={styles.achievementStack}>
-        {unlockedAchievements.map((a, i) => (
-          <div key={a.code + i} style={styles.achievementToast} className="animate-fade">
-            <div style={styles.achievementEmoji}>{a.emoji}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, letterSpacing: '0.05em' }}>
-                ACHIEVEMENT UNLOCKED
-              </div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{a.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.desc}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Player header */}
-      <div style={styles.playerCard} className="card">
-        <div style={styles.playerRow}>
-          <PixelCharacter equipped={equipped} appearance={user||{}} size={80} cheering={petCheering}/>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ marginBottom: 4 }}>
-              <BannerName
-                username={user?.username || ''}
-                banner={equipped?.banner}
-                size="lg"
-                cinzel
-              />
-            </div>
-            <div style={styles.playerTitle}>
-              <span style={styles.levelBadge}>Lv.{currentLevel}</span>
-              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{levelTitle(currentLevel)}</span>
-              {user?.rebirth_count > 0 && (
-                <span title={`${(1 + 0.5 * user.rebirth_count).toFixed(1)}× XP & gold (permanent)`}
-                  style={{
-                    padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 700,
-                    background: 'linear-gradient(90deg, #7c3aed, #ec4899)',
-                    color: 'white',
-                  }}>
-                  ♾ R{user.rebirth_count} · {(1 + 0.5 * user.rebirth_count).toFixed(1)}×
-                </span>
-              )}
-              {user?.streak_shield && (
-                <span title="Your streak is protected from one missed day" style={styles.shieldChip}>
-                  🛡️ Shield
-                </span>
-              )}
-            </div>
-            {/* Quick-access icons under username */}
-            <div style={styles.quickIcons}>
-              <Link to="/stats" title="View detailed stats" style={styles.quickIcon}>
-                <span style={{ fontSize: 14 }}>📊</span>
-                <span>Stats</span>
-              </Link>
-              <Link to="/achievements" title="View trophies & achievements" style={styles.quickIcon}>
-                <span style={{ fontSize: 14 }}>🏆</span>
-                <span>Trophies</span>
-              </Link>
-              <Link to="/dungeon" title="Enter the dungeon" style={{ ...styles.quickIcon, color: '#fca5a5', borderColor: '#ef444455' }}>
-                <span style={{ fontSize: 14 }}>⚔️</span>
-                <span>Dungeon</span>
-              </Link>
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>XP</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currentXP} / {nextLevelXP}</span>
-              </div>
-              <div className="xp-bar-wrap">
-                <div className="xp-bar-fill" style={{ width: `${xpProgress}%` }} />
-              </div>
-            </div>
-          </div>
-          <div style={styles.statsCol}>
-            <div style={styles.statItem}>
-              <span style={{ fontSize: 18 }}>🔥</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Best Streak</span>
-              <span style={{ fontWeight: 700, color: 'var(--gold)' }}>
-                {habits.reduce((max, h) => Math.max(max, h.best_streak || 0), 0)}
+        <div style={styles.identity}>
+          <BannerName
+            username={user?.username || ''}
+            banner={equipped?.banner}
+            size="lg"
+            cinzel
+          />
+          <div style={styles.titleRow}>
+            <span style={styles.levelBadge}>Lv.{currentLevel}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>{levelTitle(currentLevel)}</span>
+            {user?.rebirth_count > 0 && (
+              <span
+                title={`${rebirthMult.toFixed(1)}× XP & gold (permanent)`}
+                style={styles.rebirthChip}
+              >
+                ♾ R{user.rebirth_count} · {rebirthMult.toFixed(1)}×
               </span>
+            )}
+          </div>
+
+          <div style={styles.xpRow}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>XP</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currentXP.toLocaleString()} / {nextLevelXP.toLocaleString()}</span>
             </div>
-            <div style={styles.statItem}>
-              <span style={{ fontSize: 18 }}>✅</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Today</span>
-              <span style={{ fontWeight: 700, color: 'var(--green)' }}>{completedCount}/{habits.length}</span>
+            <div className="xp-bar-wrap">
+              <div className="xp-bar-fill" style={{ width: `${xpProgress}%` }} />
             </div>
+          </div>
+
+          <div style={styles.statRow}>
+            <Stat icon="🪙" label="Gold"      value={(user?.gold || 0).toLocaleString()} color="var(--gold)" />
+            <Stat icon="⚔️" label="Ascension" value={user?.dungeon_ascension || 0} />
+            <Stat icon="🌊" label="Best Wave" value={user?.best_survival_wave || 0} />
           </div>
         </div>
       </div>
 
-      {/* Today's progress */}
-      {habits.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <h2 style={{ fontSize: 16, color: 'var(--text-muted)' }}>Today's Quests</h2>
-            <span style={{ fontSize: 13, color: completedCount === habits.length ? 'var(--green)' : 'var(--text-muted)' }}>
-              {completedCount === habits.length && habits.length > 0 ? '⭐ Perfect day!' : `${completedCount} / ${habits.length} done`}
-            </span>
-          </div>
-          <div style={styles.progressBar}>
-            <div style={{ ...styles.progressFill, width: `${habits.length ? (completedCount / habits.length) * 100 : 0}%` }} />
-          </div>
+      {/* ── ENTER DUNGEON CTA ───────────────────────────────────── */}
+      <Link to="/dungeon" style={styles.dungeonCta} className="card">
+        <span style={{ fontSize: 32 }}>⚔️</span>
+        <div style={{ flex: 1 }}>
+          <div style={styles.ctaTitle}>Enter the Dungeon</div>
+          <div style={styles.ctaSub}>Slay monsters · earn gold · climb the ascension ladder</div>
         </div>
-      )}
+        <span style={{ fontSize: 24, color: 'var(--gold)' }}>→</span>
+      </Link>
 
-      {/* Habit list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {habits.map(habit => (
-          <HabitCard
-            key={habit.id}
-            habit={habit}
-            onComplete={() => complete(habit)}
-            onDelete={() => deleteHabit(habit.id)}
-          />
-        ))}
-
-        {habits.length === 0 && !showAdd && (
-          <div style={styles.empty}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🗡️</div>
-            <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--text-muted)', marginBottom: 6 }}>No quests yet</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Add your first habit to begin your journey</p>
-          </div>
-        )}
+      {/* ── EQUIPPED ITEMS ──────────────────────────────────────── */}
+      <div>
+        <h3 style={styles.sectionTitle}>Equipped</h3>
+        <div style={styles.slotGrid}>
+          {SLOTS.map(slot => {
+            const item = equipped?.[slot.key];
+            const rarity = item?.rarity || 'common';
+            const border = item ? RARITY_COLORS[rarity] : 'var(--border)';
+            return (
+              <Link
+                key={slot.key}
+                to="/avatar"
+                title={item ? `${item.name} (${rarity})` : `No ${slot.label.toLowerCase()} equipped`}
+                style={{ ...styles.slot, borderColor: border }}
+                className="card"
+              >
+                <div style={styles.slotIcon}>{item?.emoji || slot.fallback}</div>
+                <div style={styles.slotLabel}>{slot.label}</div>
+                <div style={{
+                  ...styles.slotName,
+                  color: item ? RARITY_COLORS[rarity] : 'var(--text-muted)',
+                  opacity: item ? 1 : 0.6,
+                }}>
+                  {item?.name || '—'}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Add habit form */}
-      {showAdd ? (
-        <form onSubmit={addHabit} style={{ ...styles.addCard, marginTop: 12 }} className="card animate-fade">
-          <h3 style={{ fontFamily: 'Cinzel, serif', marginBottom: 16, fontSize: 16 }}>New Quest</h3>
-          <input
-            autoFocus value={newHabit.name}
-            onChange={e => setNewHabit(f => ({ ...f, name: e.target.value }))}
-            placeholder="Habit name..."
-            style={styles.input}
-          />
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Icon</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {ICONS.map(icon => (
-                <button key={icon} type="button"
-                  onClick={() => setNewHabit(f => ({ ...f, icon }))}
-                  style={{ ...styles.iconBtn, ...(newHabit.icon === icon ? styles.iconBtnActive : {}) }}
-                >{icon}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Color</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {COLORS.map(c => (
-                <button key={c} type="button"
-                  onClick={() => setNewHabit(f => ({ ...f, color: c }))}
-                  style={{ width: 24, height: 24, borderRadius: '50%', background: c, border: newHabit.color === c ? '2px solid white' : '2px solid transparent', cursor: 'pointer' }}
-                />
-              ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Add Quest</button>
-            <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
-          </div>
-        </form>
-      ) : (
-        <button
-          className="btn btn-ghost"
-          style={{ width: '100%', marginTop: 12, padding: '14px', borderStyle: 'dashed' }}
-          onClick={() => setShowAdd(true)}
-        >
-          + Add New Quest
-        </button>
-      )}
+      {/* ── SECONDARY LINKS ─────────────────────────────────────── */}
+      <div style={styles.secondaryRow}>
+        <Link to="/avatar" style={styles.secondaryLink} className="card">🎨 Customize Avatar</Link>
+        <Link to="/achievements" style={styles.secondaryLink} className="card">🏆 Achievements</Link>
+        <Link to="/leaderboard" style={styles.secondaryLink} className="card">📊 Leaderboard</Link>
+      </div>
     </div>
   );
 }
 
-function HabitCard({ habit, onComplete, onDelete }) {
-  const [hovered, setHovered] = useState(false);
-
+function Stat({ icon, label, value, color }) {
   return (
-    <div
-      className={habit.completed_today ? '' : ''}
-      style={{
-        ...styles.habitCard,
-        opacity: habit.completed_today ? 0.75 : 1,
-        borderColor: habit.completed_today ? habit.color + '55' : 'var(--border)',
-        background: habit.completed_today ? `${habit.color}11` : 'var(--bg2)',
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <button
-        onClick={onComplete}
-        style={{
-          ...styles.checkBtn,
-          background: habit.completed_today ? habit.color : 'transparent',
-          borderColor: habit.completed_today ? habit.color : 'var(--border-bright)',
-          transform: habit.completed_today ? 'scale(1.05)' : 'scale(1)'
-        }}
-      >
-        {habit.completed_today ? '✓' : habit.icon}
-      </button>
-
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 500, textDecoration: habit.completed_today ? 'line-through' : 'none', color: habit.completed_today ? 'var(--text-muted)' : 'var(--text)' }}>
-            {habit.name}
-          </span>
-          {habit.streak > 0 && (
-            <span className="streak-fire">🔥{habit.streak}</span>
-          )}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-          {habit.total_completions} total · Best: {habit.best_streak} days
-        </div>
-      </div>
-
-      {hovered && (
-        <button
-          onClick={onDelete}
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 16, padding: '4px 8px', borderRadius: 6 }}
-        >✕</button>
-      )}
+    <div style={styles.stat}>
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+      <span style={{ fontWeight: 700, fontSize: 15, color: color || 'var(--text)' }}>{value}</span>
     </div>
   );
 }
-
 
 const styles = {
-  wrap: { display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 32 },
-  levelUpBanner: {
-    position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)',
-    background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
-    color: '#1a1200', padding: '12px 24px', borderRadius: 12, fontWeight: 700,
-    zIndex: 100, boxShadow: '0 8px 32px rgba(245,158,11,0.4)', whiteSpace: 'nowrap'
+  wrap: { display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 40 },
+
+  avatarCard: {
+    padding: 24,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 20,
+    background: 'radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.18) 0%, var(--bg2) 60%)',
   },
-  xpFloat: {
-    position: 'fixed', top: '40%', right: '20%',
-    color: 'var(--gold)', fontWeight: 700, fontSize: 18,
-    animation: 'xpFloat 1.2s ease forwards', pointerEvents: 'none', zIndex: 200
-  },
-  achievementStack: {
-    position: 'fixed', bottom: 20, right: 20, display: 'flex',
-    flexDirection: 'column', gap: 10, zIndex: 100, maxWidth: 340,
-  },
-  achievementToast: {
-    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-    background: 'linear-gradient(135deg, var(--bg2), var(--bg3))',
-    border: '1px solid var(--gold)',
-    borderRadius: 12, boxShadow: '0 8px 24px rgba(245, 158, 11, 0.25)',
-  },
-  achievementEmoji: {
-    width: 44, height: 44, borderRadius: '50%',
-    background: 'rgba(245, 158, 11, 0.18)',
+  avatarFrame: {
+    width: 280, height: 280,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 24, flexShrink: 0,
+    border: '2px solid var(--border-bright)',
+    borderRadius: 20,
+    background: 'radial-gradient(circle at 50% 60%, rgba(245,197,66,0.10), transparent 70%), var(--bg3)',
+    boxShadow: '0 0 32px rgba(245,197,66,0.12), inset 0 0 24px rgba(0,0,0,0.3)',
+    overflow: 'hidden',
   },
-  playerCard: { padding: 20 },
-  playerRow: { display: 'flex', gap: 16, alignItems: 'flex-start' },
-  avatar: {
-    width: 52, height: 52, borderRadius: '50%', display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
-    fontFamily: 'Cinzel, serif', fontSize: 22, fontWeight: 700, color: 'white', flexShrink: 0
+  identity: {
+    width: '100%',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
   },
-  playerName: { fontFamily: 'Cinzel, serif', fontSize: 18, fontWeight: 600, marginBottom: 2 },
-  playerTitle: { display: 'flex', alignItems: 'center', gap: 8 },
+  titleRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
   levelBadge: {
-    background: 'var(--accent)', color: 'white', padding: '2px 8px',
-    borderRadius: 99, fontSize: 12, fontWeight: 600
+    padding: '4px 12px',
+    borderRadius: 99,
+    background: 'var(--accent)',
+    color: 'white',
+    fontSize: 13,
+    fontWeight: 700,
   },
-  shieldChip: {
-    background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa',
-    border: '1px solid #3b82f655',
-    padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600
+  rebirthChip: {
+    padding: '4px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+    background: 'linear-gradient(90deg, #7c3aed, #ec4899)',
+    color: 'white',
   },
-  quickIcons: {
-    display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap',
+  xpRow: { width: '100%', maxWidth: 360, marginTop: 4 },
+  statRow: {
+    display: 'flex', gap: 12, marginTop: 8,
+    width: '100%', maxWidth: 420, justifyContent: 'space-around',
   },
-  quickIcon: {
-    display: 'inline-flex', alignItems: 'center', gap: 4,
-    padding: '3px 9px', borderRadius: 99,
+  stat: {
+    flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+    padding: '8px 10px', borderRadius: 10,
     background: 'var(--bg3)', border: '1px solid var(--border)',
-    color: 'var(--text-muted)', textDecoration: 'none',
-    fontSize: 11, fontWeight: 500,
-    transition: 'all 0.15s',
   },
-  statsCol: { display: 'flex', gap: 12, flexShrink: 0 },
-  statItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
-  progressBar: { height: 6, background: 'var(--bg3)', borderRadius: 99, overflow: 'hidden' },
-  progressFill: {
-    height: '100%', borderRadius: 99,
-    background: 'linear-gradient(90deg, var(--green), #34d399)',
-    transition: 'width 0.5s ease'
+
+  dungeonCta: {
+    padding: '16px 20px',
+    display: 'flex', alignItems: 'center', gap: 16,
+    background: 'linear-gradient(90deg, rgba(127,29,29,0.25), rgba(99,102,241,0.18))',
+    border: '1px solid #ef444466',
+    textDecoration: 'none',
+    transition: 'transform 0.15s, box-shadow 0.15s',
   },
-  habitCard: {
-    display: 'flex', alignItems: 'center', gap: 14,
-    padding: '14px 16px', borderRadius: 12, border: '1px solid',
-    transition: 'all 0.2s ease', cursor: 'default'
+  ctaTitle: {
+    fontFamily: 'Cinzel, serif', fontSize: 18, fontWeight: 700,
+    color: 'var(--text)',
   },
-  checkBtn: {
-    width: 44, height: 44, borderRadius: '50%', border: '2px solid',
-    fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0, transition: 'all 0.2s ease', color: 'white'
+  ctaSub: { fontSize: 12, color: 'var(--text-muted)', marginTop: 2 },
+
+  sectionTitle: {
+    fontFamily: 'Cinzel, serif', fontSize: 13, color: 'var(--text-muted)',
+    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10,
   },
-  addCard: { background: 'var(--bg2)' },
-  input: {
-    width: '100%', background: 'var(--bg3)', border: '1px solid var(--border)',
-    borderRadius: 8, padding: '12px 14px', color: 'var(--text)', fontSize: 14, outline: 'none'
+  slotGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+    gap: 10,
   },
-  iconBtn: {
-    width: 36, height: 36, borderRadius: 8, border: '1px solid var(--border)',
-    background: 'var(--bg3)', fontSize: 18, cursor: 'pointer', display: 'flex',
-    alignItems: 'center', justifyContent: 'center'
+  slot: {
+    padding: '12px 8px',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+    borderRadius: 12,
+    borderWidth: 2, borderStyle: 'solid',
+    textDecoration: 'none',
+    transition: 'transform 0.12s',
   },
-  iconBtnActive: { border: '1px solid var(--accent)', background: 'rgba(99,102,241,0.15)' },
-  empty: {
-    textAlign: 'center', padding: '48px 24px',
-    background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12
-  }
+  slotIcon:  { fontSize: 32, lineHeight: 1 },
+  slotLabel: { fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' },
+  slotName:  { fontSize: 12, fontWeight: 600, textAlign: 'center', lineHeight: 1.2 },
+
+  secondaryRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+    gap: 10,
+  },
+  secondaryLink: {
+    padding: '12px 14px',
+    fontSize: 13,
+    textAlign: 'center',
+    textDecoration: 'none',
+    color: 'var(--text)',
+    transition: 'border-color 0.15s',
+  },
 };

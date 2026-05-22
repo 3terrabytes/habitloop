@@ -14,6 +14,7 @@ import AchievementsPage from './pages/AchievementsPage';
 import StatsPage from './pages/StatsPage';
 import AdminPage from './pages/AdminPage';
 import DungeonPage from './pages/DungeonPage';
+import LeaderboardPage from './pages/LeaderboardPage';
 import UpdateModal from './components/UpdateModal';
 import FeaturesDebreifModal from './components/FeaturesDebreifModal';
 import SuspensionWarning from './components/SuspensionWarning';
@@ -48,13 +49,19 @@ function Layout({ children }) {
 
           <nav style={styles.nav}>
             <NavLink to="/" end style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
-              Quests
+              Home
+            </NavLink>
+            <NavLink to="/dungeon" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
+              Dungeon
+            </NavLink>
+            <NavLink to="/avatar" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
+              Avatar
             </NavLink>
             <NavLink to="/guild" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
               Friends
             </NavLink>
-            <NavLink to="/avatar" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
-              Avatar
+            <NavLink to="/leaderboard" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
+              Board
             </NavLink>
             <NavLink to="/suggestions" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
               Suggest
@@ -123,6 +130,7 @@ export default function App() {
           <Route path="/settings" element={<Protected><Layout><SettingsPage /></Layout></Protected>} />
           <Route path="/admin" element={<Protected><AdminGuard><Layout><AdminPage /></Layout></AdminGuard></Protected>} />
           <Route path="/dungeon" element={<Protected><Layout><DungeonPage /></Layout></Protected>} />
+          <Route path="/leaderboard" element={<Protected><Layout><LeaderboardPage /></Layout></Protected>} />
           <Route path="/users/:username" element={<ProfilePage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

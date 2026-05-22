@@ -4,57 +4,15 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import PixelCharacter from '../components/PixelCharacter';
 import BannerName from '../components/BannerName';
+import { Avatar, SectionTitle } from '../components/Leaderboard';
 
 function levelTitle(level) {
   const t = ['','Rookie','Apprentice','Explorer','Achiever','Challenger','Warrior','Champion','Master','Grandmaster','Legend'];
   return t[Math.min(level, t.length - 1)];
 }
 
-function xpForLevel(level) {
-  return Math.floor(100 * Math.pow(level, 1.5));
-}
-
 const RARITY_COLORS = { common: '#9ca3af', rare: '#3b82f6', epic: '#8b5cf6', legendary: '#f59e0b' };
 const RARITY_BG     = { common: '#9ca3af22', rare: '#3b82f622', epic: '#8b5cf622', legendary: '#f59e0b22' };
-
-// ── Mini streak calendar for a friend ──────────────────────────────────────
-function StreakCalendar({ completedDays = [] }) {
-  const today = new Date();
-  const days = [];
-  for (let i = 27; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const iso = d.toISOString().slice(0, 10);
-    days.push({ iso, label: d.toLocaleDateString('en-GB', { day:'numeric', month:'short' }) });
-  }
-  const done = new Set(completedDays.map(d => d.slice(0, 10)));
-  return (
-    <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Last 28 Days</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        {days.map(({ iso, label }) => (
-          <div key={iso} title={label} style={{
-            width: 18, height: 18, borderRadius: 4,
-            background: done.has(iso) ? 'var(--green)' : 'var(--bg3)',
-            border: `1px solid ${done.has(iso) ? 'var(--green)' : 'var(--border)'}`,
-            opacity: done.has(iso) ? 1 : 0.5,
-            transition: 'all 0.15s',
-          }} />
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--green)' }}/>
-          Completed
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--bg3)', border: '1px solid var(--border)' }}/>
-          Missed
-        </span>
-      </div>
-    </div>
-  );
-}
 
 // ── Expanded friend profile mini-card ──────────────────────────────────────
 function FriendProfileCard({ friend, onClose }) {
@@ -104,12 +62,12 @@ function FriendProfileCard({ friend, onClose }) {
           </Link>
         </div>
 
-        {/* Stats */}
+        {/* Dungeon stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
           {[
-            { icon: '🔥', label: 'Best Streak', val: details?.best_streak != null ? `${details.best_streak}d` : `${friend.best_streak ?? '?'}d` },
+            { icon: '⚔️', label: 'Ascension', val: details?.dungeon_ascension ?? friend.dungeon_ascension ?? 0 },
+            { icon: '🌊', label: 'Best Wave', val: details?.best_survival_wave ?? friend.best_survival_wave ?? 0 },
             { icon: '⚡', label: 'XP', val: friend.xp?.toLocaleString() ?? '🔒' },
-            { icon: '📋', label: 'Habits', val: details?.habits?.length ?? friend.total_habits ?? '?' },
           ].map(({ icon, label, val }) => (
             <div key={label} style={{ background: 'var(--bg3)', borderRadius: 10, padding: '10px 8px', textAlign: 'center', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: 18 }}>{icon}</div>
@@ -118,25 +76,6 @@ function FriendProfileCard({ friend, onClose }) {
             </div>
           ))}
         </div>
-
-        {/* Habits list */}
-        {details?.habits?.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Habits</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {details.habits.map((h, i) => (
-                <span key={i} style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 20, padding: '4px 10px', fontSize: 12 }}>
-                  {h.emoji || '🎯'} {h.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Streak calendar */}
-        {details?.completed_days && (
-          <StreakCalendar completedDays={details.completed_days} />
-        )}
 
         <button onClick={onClose} style={{ marginTop: 20, width: '100%', padding: '10px', borderRadius: 10, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14 }}>
           Close
@@ -175,7 +114,7 @@ export default function FriendsPage() {
   const [search, setSearch]             = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [requested, setRequested]       = useState(new Set());
-  const [tab, setTab]                   = useState('leaderboard');
+  const [tab, setTab]                   = useState('friends');
   const [selectedFriend, setSelectedFriend] = useState(null);
 
   // Trade state
@@ -333,32 +272,11 @@ export default function FriendsPage() {
     }
   };
 
-  // Leaderboard
-  const board = [
-    {
-      id: user?.id,
-      username: user?.username,
-      xp: user?.xp || 0,
-      level: user?.level || 1,
-      avatar_color: user?.avatar_color,
-      avatar_skin: user?.avatar_skin,
-      avatar_hair: user?.avatar_hair,
-      avatar_eyes: user?.avatar_eyes,
-      avatar_hair_style: user?.avatar_hair_style,
-      avatar_gender: user?.avatar_gender,
-      avatar_beard: user?.avatar_beard,
-      equipped: myEquipped,
-      isSelf: true,
-    },
-    ...friends.filter(f => !f.suspended)
-  ].sort((a, b) => b.xp - a.xp);
-
   const TABS = [
-    { key: 'leaderboard', label: '🏆 Board' },
-    { key: 'friends',     label: `👥 Friends${pending.length ? ` (${pending.length})` : ''}` },
-    { key: 'find',        label: '🔍 Find' },
-    { key: 'gift',        label: '🎁 Gift' },
-    { key: 'trade',       label: `⚔️ Trade${tradePending.length ? ` (${tradePending.length})` : ''}` },
+    { key: 'friends', label: `👥 Friends${pending.length ? ` (${pending.length})` : ''}` },
+    { key: 'find',    label: '🔍 Find' },
+    { key: 'gift',    label: '🎁 Gift' },
+    { key: 'trade',   label: `⚔️ Trade${tradePending.length ? ` (${tradePending.length})` : ''}` },
   ];
 
   return (
@@ -416,37 +334,6 @@ export default function FriendsPage() {
         ))}
       </div>
 
-      {/* ── LEADERBOARD ── */}
-      {tab === 'leaderboard' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {board.length >= 2 ? (
-            <Podium players={board.slice(0, 3)} onClick={(p) => !p.isSelf && setSelectedFriend(p)} />
-          ) : null}
-
-          {board.length > 3 && (
-            <>
-              <SectionTitle>The Rest</SectionTitle>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {board.slice(3).map((p, i) => (
-                  <PlayerCard key={p.id} player={p} rank={i + 4}
-                    onClick={() => !p.isSelf && setSelectedFriend(p)} />
-                ))}
-              </div>
-            </>
-          )}
-
-          {board.length === 1 && (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
-              <p style={{ fontSize: 14 }}>Add friends to fill the podium!</p>
-            </div>
-          )}
-
-          <p style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', marginTop: 8 }}>
-            Tap a player to view their profile
-          </p>
-        </div>
-      )}
-
       {/* ── FRIENDS ── */}
       {tab === 'friends' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -482,7 +369,7 @@ export default function FriendsPage() {
                   <BannerName username={f.username} banner={f.equipped?.banner} size="sm" />
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Lv.{f.level} · {f.completed_today}/{f.total_habits} today · 🔥{f.best_streak}
+                  Lv.{f.level} · ⚔️ Asc.{f.dungeon_ascension || 0} · 🌊 W{f.best_survival_wave || 0}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
@@ -711,179 +598,8 @@ export default function FriendsPage() {
   );
 }
 
-// ── Compact avatar (used in friend rows, search results, pending) ──────────
-function Avatar({ user, size = 44 }) {
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 10,
-      background: `linear-gradient(180deg, ${user.avatar_color || '#6366f1'}33, ${user.avatar_color || '#6366f1'}10)`,
-      border: '1px solid var(--border)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      overflow: 'hidden', flexShrink: 0, position: 'relative',
-    }}>
-      <PixelCharacter appearance={user} equipped={user.equipped || {}} size={size} />
-    </div>
-  );
-}
-
-// ── Podium (top 3) ─────────────────────────────────────────────────────────
-function Podium({ players, onClick }) {
-  // Arrange visually: 2nd (left), 1st (centre, tallest), 3rd (right).
-  const first  = players[0];
-  const second = players[1];
-  const third  = players[2];
-
-  const COLORS = {
-    1: { glow: '#f5c542', step: 'linear-gradient(180deg,#fde68a,#f59e0b)', border: '#f5c542' },
-    2: { glow: '#cbd5e1', step: 'linear-gradient(180deg,#e2e8f0,#94a3b8)', border: '#cbd5e1' },
-    3: { glow: '#d4a373', step: 'linear-gradient(180deg,#e8c39a,#a86b3a)', border: '#d4a373' },
-  };
-
-  const PodiumStep = ({ player, rank, height }) => {
-    if (!player) return <div style={{ flex: 1 }} />;
-    const c = COLORS[rank];
-    const medal = ['🥇', '🥈', '🥉'][rank - 1];
-    return (
-      <div
-        onClick={() => onClick && onClick(player)}
-        style={{
-          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          cursor: player.isSelf ? 'default' : 'pointer',
-          position: 'relative',
-        }}>
-        {/* Crown for #1 */}
-        {rank === 1 && (
-          <div style={{ fontSize: 26, lineHeight: 1, marginBottom: 2, filter: 'drop-shadow(0 0 8px rgba(245,197,66,0.7))' }}>
-            👑
-          </div>
-        )}
-
-        {/* Character */}
-        <div style={{
-          position: 'relative',
-          padding: 6, borderRadius: 14,
-          background: `radial-gradient(circle at 50% 40%, ${c.glow}55, transparent 70%)`,
-        }}>
-          <div style={{
-            border: `2px solid ${c.border}`,
-            borderRadius: 12, overflow: 'hidden',
-            background: 'var(--bg2)',
-            boxShadow: `0 0 18px ${c.glow}55`,
-          }}>
-            <PixelCharacter
-              appearance={player}
-              equipped={player.equipped || {}}
-              size={rank === 1 ? 92 : 72}
-            />
-          </div>
-          {/* Medal corner */}
-          <div style={{
-            position: 'absolute', top: -4, right: -4,
-            width: 28, height: 28, borderRadius: '50%',
-            background: 'var(--bg)', border: `2px solid ${c.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-          }}>{medal}</div>
-        </div>
-
-        {/* Name + XP */}
-        <div style={{ marginTop: 8, textAlign: 'center', maxWidth: '100%', padding: '0 4px' }}>
-          <BannerName
-            username={player.username}
-            banner={player.equipped?.banner}
-            size={rank === 1 ? 'md' : 'sm'}
-            isSelf={player.isSelf}
-          />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-            Lv.{player.level} · {player.xp.toLocaleString()} XP
-          </div>
-        </div>
-
-        {/* Podium step */}
-        <div style={{
-          marginTop: 8, width: '100%', height,
-          background: c.step,
-          borderTopLeftRadius: 8, borderTopRightRadius: 8,
-          border: `1px solid ${c.border}`,
-          borderBottom: 'none',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'Cinzel, serif', fontSize: 22, fontWeight: 700,
-          color: 'rgba(0,0,0,0.55)',
-          textShadow: '0 1px 0 rgba(255,255,255,0.4)',
-          boxShadow: `0 -2px 12px ${c.glow}55, inset 0 4px 12px rgba(255,255,255,0.2)`,
-        }}>
-          {rank}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="card" style={{
-      padding: '20px 14px 0',
-      background: 'linear-gradient(180deg, rgba(99,102,241,0.10), transparent 60%)',
-    }}>
-      <div style={{ fontFamily: 'Cinzel, serif', fontSize: 13, textAlign: 'center', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>
-        🏆 Champions 🏆
-      </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 4 }}>
-        <PodiumStep player={second} rank={2} height={70} />
-        <PodiumStep player={first}  rank={1} height={100} />
-        <PodiumStep player={third}  rank={3} height={50} />
-      </div>
-    </div>
-  );
-}
-
-function PlayerCard({ player, rank, onClick }) {
-  const xpPrev = Math.floor(100 * Math.pow(player.level, 1.5));
-  const xpNext = xpForLevel(player.level + 1);
-  const pct    = Math.min(((player.xp - xpPrev) / (xpNext - xpPrev)) * 100, 100);
-
-  return (
-    <div onClick={onClick} style={{
-      ...S.playerCard,
-      cursor: player.isSelf ? 'default' : 'pointer',
-      ...(player.isSelf ? { borderColor: 'var(--accent)', background: 'rgba(99,102,241,0.08)' } : {}),
-      transition: 'all 0.15s',
-    }}
-    className="card"
-    onMouseEnter={e => { if (!player.isSelf) e.currentTarget.style.borderColor = 'var(--border-bright)'; }}
-    onMouseLeave={e => { if (!player.isSelf) e.currentTarget.style.borderColor = ''; }}>
-      <div style={{ fontSize: 13, color: 'var(--text-muted)', width: 28, textAlign: 'center', fontWeight: 600 }}>
-        #{rank}
-      </div>
-      <Avatar user={player} size={44} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <BannerName
-            username={player.username}
-            banner={player.equipped?.banner}
-            size="sm"
-            isSelf={player.isSelf}
-          />
-          <span style={{ padding: '2px 8px', borderRadius: 99, fontSize: 11, background: player.isSelf ? 'var(--accent)' : 'var(--bg3)', color: player.isSelf ? 'white' : 'var(--text-muted)', flexShrink: 0 }}>
-            Lv.{player.level}
-          </span>
-        </div>
-        <div className="xp-bar-wrap" style={{ marginTop: 4 }}>
-          <div className="xp-bar-fill" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 15 }}>{player.xp.toLocaleString()}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>XP</div>
-      </div>
-    </div>
-  );
-}
-
-function SectionTitle({ children }) {
-  return <h3 style={{ fontFamily: 'Cinzel, serif', fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{children}</h3>;
-}
-
 const S = {
-  friendRow:  { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' },
-  playerCard: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' },
+  friendRow: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' },
   input: {
     width: '100%', background: 'var(--bg2)', border: '1px solid var(--border)',
     borderRadius: 10, padding: '12px 16px', color: 'var(--text)', fontSize: 14, outline: 'none',

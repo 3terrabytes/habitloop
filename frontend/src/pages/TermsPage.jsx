@@ -33,7 +33,7 @@ export default function TermsPage() {
     ]},
     { title: '2. Acceptable Behaviour', items: [
       'Treat all other users with respect at all times.',
-      'Swearing, offensive language, and profanity are not permitted anywhere on the platform, including usernames, habit names, messages, and suggestions.',
+      'Swearing, offensive language, and profanity are not permitted anywhere on the platform, including usernames, messages, and suggestions.',
       'Harassment, bullying, threats, or intimidation of any other user will result in immediate account suspension.',
       'Hate speech of any kind — including content that discriminates based on race, gender, religion, nationality, sexual orientation, or disability — is strictly forbidden.',
       'Do not impersonate other users, public figures, or Tickd staff.',
@@ -41,12 +41,12 @@ export default function TermsPage() {
     ]},
     { title: '3. Usernames and Content', items: [
       'Usernames must be appropriate and inoffensive. Tickd reserves the right to remove or rename any username deemed unsuitable.',
-      'Habit names, messages, suggestions, and any other user-generated content must be appropriate for all audiences.',
+      'Messages, suggestions, and any other user-generated content must be appropriate for all audiences.',
       'Inappropriate, sexual, violent, or otherwise offensive content is not allowed and will be removed without notice.',
     ]},
     { title: '4. Fair Use', items: [
       'Do not attempt to exploit, hack, or manipulate the platform, its systems, or other users\' accounts.',
-      'Cheating, including artificially inflating streaks, XP, or gold through unauthorised means, is not permitted.',
+      'Cheating, including artificially inflating XP, gold, or dungeon progress through unauthorised means, is not permitted.',
       'Do not use automated scripts, bots, or tools to interact with Tickd.',
       'Gifting and trading features must be used in good faith. Using them to manipulate or scam other users will result in a ban.',
     ]},
@@ -78,8 +78,8 @@ export default function TermsPage() {
     ]},
     { title: '10. Disclaimer', items: [
       'Tickd is provided as-is. We do not guarantee uninterrupted availability of the service.',
-      'We are not responsible for any loss of data, streaks, or progress resulting from technical issues.',
-      'Tickd is a habit-tracking game and should not be used as a substitute for professional medical, psychological, or wellness advice.',
+      'We are not responsible for any loss of data or progress resulting from technical issues.',
+      'Tickd is a fantasy pixel-art dungeon-crawler game and is intended purely for entertainment.',
     ]},
   ];
 

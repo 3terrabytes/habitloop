@@ -18,27 +18,6 @@ const initDB = async () => {
       created_at TIMESTAMP DEFAULT NOW()
     );
 
-    CREATE TABLE IF NOT EXISTS habits (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      name VARCHAR(100) NOT NULL,
-      icon VARCHAR(10) DEFAULT '⚡',
-      color VARCHAR(7) DEFAULT '#6366f1',
-      streak INTEGER DEFAULT 0,
-      best_streak INTEGER DEFAULT 0,
-      total_completions INTEGER DEFAULT 0,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
-
-    CREATE TABLE IF NOT EXISTS habit_logs (
-      id SERIAL PRIMARY KEY,
-      habit_id INTEGER REFERENCES habits(id) ON DELETE CASCADE,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      completed_date DATE NOT NULL,
-      xp_earned INTEGER DEFAULT 10,
-      UNIQUE(habit_id, completed_date)
-    );
-
     CREATE TABLE IF NOT EXISTS friendships (
       id SERIAL PRIMARY KEY,
       requester_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -68,10 +47,12 @@ const initDB = async () => {
 
     ALTER TABLE user_equipped ADD COLUMN IF NOT EXISTS companion VARCHAR(60);
     ALTER TABLE user_equipped ADD COLUMN IF NOT EXISTS title VARCHAR(60);
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_shield BOOLEAN DEFAULT false;
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS gold INTEGER DEFAULT 0;
-    ALTER TABLE habits ADD COLUMN IF NOT EXISTS gold_reward INTEGER DEFAULT 10;
+
+    -- Drop legacy habit tables (Tickd is now dungeon-only).
+    DROP TABLE IF EXISTS habit_logs;
+    DROP TABLE IF EXISTS habits;
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_skin    VARCHAR(7)  DEFAULT '#e8b88a';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_hair    VARCHAR(7)  DEFAULT '#8B4513';
@@ -117,9 +98,10 @@ const initDB = async () => {
       created_at TIMESTAMP DEFAULT NOW()
     );
 
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_xp       TEXT DEFAULT 'friends';
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_streaks  TEXT DEFAULT 'friends';
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_habits   TEXT DEFAULT 'friends';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_xp TEXT DEFAULT 'friends';
+    ALTER TABLE users DROP COLUMN IF EXISTS privacy_streaks;
+    ALTER TABLE users DROP COLUMN IF EXISTS privacy_habits;
+    ALTER TABLE users DROP COLUMN IF EXISTS streak_shield;
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_enabled    BOOLEAN DEFAULT false;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_time       VARCHAR(5) DEFAULT '20:00';

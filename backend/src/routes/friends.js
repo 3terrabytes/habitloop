@@ -70,21 +70,18 @@ router.get('/pending', async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
   const { rows } = await pool.query(`
     SELECT u.id, u.username, u.xp, u.level, u.avatar_color, u.avatar_skin, u.avatar_hair, u.avatar_eyes, u.avatar_hair_style, u.avatar_beard,
       u.suspension_type, u.suspended_until,
-      e.weapon AS eq_weapon, e.armor AS eq_armor, e.banner AS eq_banner, e.badge AS eq_badge,
-      (SELECT COUNT(*) FROM habit_logs l WHERE l.user_id = u.id AND l.completed_date = $2) AS completed_today,
-      (SELECT COUNT(*) FROM habits h WHERE h.user_id = u.id) AS total_habits,
-      (SELECT MAX(h.streak) FROM habits h WHERE h.user_id = u.id) AS best_streak
+      u.dungeon_ascension, u.best_survival_wave,
+      e.weapon AS eq_weapon, e.armor AS eq_armor, e.banner AS eq_banner, e.badge AS eq_badge
     FROM users u
     JOIN friendships f ON
       (f.requester_id = $1 AND f.addressee_id = u.id AND f.status = 'accepted') OR
       (f.addressee_id = $1 AND f.requester_id = u.id AND f.status = 'accepted')
     LEFT JOIN user_equipped e ON e.user_id = u.id
     WHERE u.id != $1 ORDER BY u.xp DESC
-  `, [req.userId, today]);
+  `, [req.userId]);
   const now = new Date();
   res.json(rows.map(r => {
     const suspended =

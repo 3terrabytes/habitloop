@@ -5,22 +5,12 @@ const { ACHIEVEMENTS, byCode } = require('../data/achievements');
 const { itemById } = require('../data/items');
 const router = express.Router();
 
-// Gather everything we need to evaluate achievement criteria in one shot.
 async function collectStats(userId) {
   const { rows: u } = await pool.query(
-    'SELECT level, lifetime_gold FROM users WHERE id = $1',
+    'SELECT level, lifetime_gold, dungeon_ascension, best_survival_wave FROM users WHERE id = $1',
     [userId]
   );
   const user = u[0] || {};
-
-  const { rows: h } = await pool.query(
-    `SELECT
-       COUNT(*)::int                                 AS habit_count,
-       COALESCE(SUM(total_completions), 0)::int      AS total_completions,
-       COALESCE(MAX(best_streak), 0)::int            AS best_streak
-     FROM habits WHERE user_id = $1`,
-    [userId]
-  );
 
   const { rows: inv } = await pool.query(
     'SELECT item_id FROM user_inventory WHERE user_id = $1',
@@ -35,41 +25,17 @@ async function collectStats(userId) {
     [userId]
   );
 
-  // Perfect day: at least one day in history where all habits at the time were
-  // completed. Use today's habit roster to check today and recent days — good
-  // enough heuristic for the achievement.
-  const { rows: pd } = await pool.query(
-    `WITH today_habits AS (
-       SELECT id FROM habits WHERE user_id = $1
-     ),
-     by_day AS (
-       SELECT completed_date, COUNT(DISTINCT habit_id)::int AS done
-       FROM habit_logs
-       WHERE user_id = $1
-         AND habit_id IN (SELECT id FROM today_habits)
-       GROUP BY completed_date
-     )
-     SELECT COUNT(*)::int AS perfect_days FROM by_day
-     WHERE done = (SELECT COUNT(*) FROM today_habits)
-       AND done >= 3`,
-    [userId]
-  );
-
   return {
-    level:             user.level || 1,
-    lifetime_gold:     Number(user.lifetime_gold || 0),
-    habit_count:       h[0].habit_count,
-    total_completions: h[0].total_completions,
-    best_streak:       h[0].best_streak,
-    items_owned:       itemsOwned,
-    legendary_owned:   legendaryOwned,
-    friend_count:      f[0].c,
-    perfect_day:       pd[0].perfect_days > 0 ? 1 : 0,
+    level:           user.level || 1,
+    lifetime_gold:   Number(user.lifetime_gold || 0),
+    ascension:       user.dungeon_ascension || 0,
+    best_wave:       user.best_survival_wave || 0,
+    items_owned:     itemsOwned,
+    legendary_owned: legendaryOwned,
+    friend_count:    f[0].c,
   };
 }
 
-// Check all achievements for a user, insert any newly earned ones, return the
-// list of newly unlocked achievement objects. Safe to call repeatedly.
 async function checkAchievements(userId) {
   const stats = await collectStats(userId);
 
@@ -79,8 +45,6 @@ async function checkAchievements(userId) {
 
   if (!earned.length) return [];
 
-  // Insert all qualifying codes, skipping ones already earned. RETURNING tells
-  // us which rows were actually inserted — those are the new unlocks.
   const placeholders = earned.map((_, i) => `($1, $${i + 2})`).join(', ');
   const { rows: inserted } = await pool.query(
     `INSERT INTO user_achievements (user_id, code) VALUES ${placeholders}
@@ -93,8 +57,6 @@ async function checkAchievements(userId) {
 
 router.use(auth);
 
-// List all achievements with earned status. Also runs a check so existing
-// users get backfilled the first time they visit the page after launch.
 router.get('/', async (req, res) => {
   try { await checkAchievements(req.userId); } catch (e) { console.error(e); }
 
@@ -115,7 +77,6 @@ router.get('/', async (req, res) => {
   });
 });
 
-// Manual re-check (also runs implicitly after habit completion / item purchase)
 router.post('/check', async (req, res) => {
   const newly = await checkAchievements(req.userId);
   res.json({ newly_unlocked: newly });

@@ -4,14 +4,12 @@
 // hp     = the monster's HP pool
 // power  = base damage per attack
 // xp     = reward XP on victory
-// gold   = reward gold on victory  (kept low — habits are the main grind)
+// gold   = reward gold on victory
 // sprite = big emoji used as the "model"
 // taunt  = flavor text shown at battle start
 
 const MONSTERS = [
   // ── tier 1: warmup ───────────────────────────────────────────────────
-  // XP cut roughly 40%, gold ~2-3x. Habits stay the main XP grind; the dungeon
-  // is now a gold faucet by design.
   { id: 'slime',       name: 'Green Slime',     tier: 1, hp: 30,  power: 6,  xp: 12, gold: 14, sprite: '🟢', element: 'poison',   taunt: 'It jiggles menacingly.' },
   { id: 'bat',         name: 'Cave Bat',        tier: 1, hp: 26,  power: 8,  xp: 13, gold: 16, sprite: '🦇', element: 'shadow',   taunt: 'Screeches in the dark.' },
   { id: 'rat',         name: 'Plague Rat',      tier: 1, hp: 22,  power: 7,  xp: 11, gold: 12, sprite: '🐀', element: 'poison',   taunt: 'You smell it before you see it.' },

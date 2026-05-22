@@ -280,10 +280,8 @@ export default function DungeonPage() {
   };
 
   // Pet damage scaling — equipped companion adds free damage every turn.
-  // Tuned so a Mini Dragon hits harder than a Habit Cat without trivialising
-  // boss fights.
-  // Pets hit hard now. Was 4/8/14/22 — roughly doubled, and mythic is its
-  // own tier above legendary. A Mini Dragon now hits like an Aimed Shot.
+  // Tuned so a Mini Dragon hits harder than a Dungeon Cat without trivialising
+  // boss fights. Mythic is its own tier above legendary.
   const PET_DMG = { common: 9, rare: 18, epic: 30, legendary: 48, mythic: 75 };
   const petBaseDamage = () => {
     const pet = inventory && inventory.equipped && inventory.equipped.companion;

@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 
-const VERSION = 'v3.3';
+const VERSION = 'v3.4';
 const UPDATES = [
-  { icon: '🎁', title: 'Item Bundles',          desc: 'Buy whole themed sets at a discount — up to 25% off vs grabbing items individually.' },
-  { icon: '🌊', title: 'New Themed Sets',       desc: 'Tidecaller, Phoenix, Frost, Sakura, Cyber, Buccaneer, Harvest, and Lunar — full sets across every slot.' },
-  { icon: '🔎', title: 'Shop Search & Sort',    desc: 'Search by name, sort by price / rarity / magic / name, filter by rarity, hide-owned, affordable-only.' },
-  { icon: '🧪', title: 'More Consumables',      desc: 'Minor XP Potion, Gold Pouch, Birthday Cake, Doubler Scroll — new one-shot boosts.' },
-  { icon: '👤', title: 'Clickable Profiles',    desc: 'Click any friend on the leaderboard to see their streaks, habit calendar and stats.' },
-  { icon: '📅', title: 'Streak Calendar',       desc: 'See your friends\' last 28 days of habit completions as a colour-coded calendar.' },
-  { icon: '🎨', title: 'Colour Themes',         desc: '7 colour themes to personalise your experience. Find them in ⚙️ Settings.' },
-  { icon: '🔒', title: 'Privacy Controls',      desc: 'Choose who sees your XP, streaks, and habits: Everyone, Friends, or Private.' },
-  { icon: '🔔', title: 'Push Notifications',    desc: 'Set a daily reminder time to check off your habits — fully customisable.' },
+  { icon: '⚔️', title: 'Dungeon-Only',         desc: 'Habits and quests are gone — Tickd is now a pure dungeon-crawler. All XP and gold come from the dungeon.' },
+  { icon: '🏠', title: 'New Avatar Home',      desc: 'Your homepage is now a large showcase of your character with all equipped items on display.' },
+  { icon: '🏆', title: 'Leaderboard Page',     desc: 'The leaderboard has its own dedicated page — accessible from the top nav.' },
+  { icon: '🏅', title: 'Dungeon Achievements', desc: 'New achievements for ascension milestones and survival waves replace the old habit ones.' },
+  { icon: '🎁', title: 'Item Bundles',         desc: 'Buy whole themed sets at a discount — up to 25% off vs grabbing items individually.' },
+  { icon: '🔎', title: 'Shop Search & Sort',   desc: 'Search by name, sort by price / rarity / magic / name, filter by rarity, hide-owned, affordable-only.' },
+  { icon: '🎨', title: 'Colour Themes',        desc: '7 colour themes to personalise your experience. Find them in ⚙️ Settings.' },
+  { icon: '🔔', title: 'Push Notifications',   desc: 'Set a daily dungeon reminder time — fully customisable.' },
 ];
 
 export default function UpdateModal() {
