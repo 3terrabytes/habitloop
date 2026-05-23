@@ -91,11 +91,19 @@ async function loadoutFor(userId) {
 
 // Public helper: full party state for sockets + REST. Includes member
 // avatars + names so clients can render the row of fighters without
-// extra round-trips.
+// extra round-trips. Also includes the pending invite list so the host
+// (and other members) can see who's been invited but not yet accepted.
 async function getPartyState(partyId) {
   const { rows: pRows } = await pool.query('SELECT * FROM parties WHERE id = $1', [partyId]);
   const party = pRows[0];
   if (!party) return null;
+  const { rows: pendingInvites } = await pool.query(
+    `SELECT i.invitee_id, u.username, u.level
+       FROM party_invites i JOIN users u ON u.id = i.invitee_id
+      WHERE i.party_id = $1 AND i.status = 'pending'
+      ORDER BY i.created_at DESC`,
+    [partyId]
+  );
   const { rows: memberRows } = await pool.query(
     `SELECT m.party_id, m.user_id, m.position, m.hp, m.max_hp, m.is_alive, m.has_acted,
             u.username, u.level, u.avatar_color, u.avatar_skin, u.avatar_hair, u.avatar_eyes,
@@ -148,6 +156,7 @@ async function getPartyState(partyId) {
     log: party.log || [],
     winner: party.winner,
     members,
+    pending_invites: pendingInvites,
   };
 }
 

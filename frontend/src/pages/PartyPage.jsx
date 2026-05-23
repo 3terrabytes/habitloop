@@ -13,7 +13,7 @@ import useParty from '../hooks/useParty';
 
 export default function PartyPage() {
   const { user, refreshUser } = useAuth();
-  const { state, connected, refresh } = useParty();
+  const { state, connected, refresh, reconnect } = useParty();
   const [invites, setInvites] = useState([]);
   const [friends, setFriends] = useState([]);
   const [loadout, setLoadout] = useState({ slotDetails: [] });
@@ -72,6 +72,9 @@ export default function PartyPage() {
     try {
       await api.party.create({ floor: 20 });
       await refresh();
+      // The WS was rejected earlier ("no active party") and is sitting in
+      // backoff — force a fresh upgrade now that we have a party to join.
+      reconnect();
       showToast('Party created. Invite some friends!');
     } catch (err) { showToast(err.message, 'error'); }
     finally { setBusy(false); }
@@ -86,16 +89,25 @@ export default function PartyPage() {
   const leave = async () => {
     if (!state) return;
     setBusy(true);
-    try { await api.party.leave(state.id); await refresh(); }
-    catch (err) { showToast(err.message, 'error'); }
+    try {
+      await api.party.leave(state.id);
+      await refresh();
+      reconnect(); // make sure WS detaches from the abandoned party
+    } catch (err) { showToast(err.message, 'error'); }
     finally { setBusy(false); }
   };
 
   const start = async () => {
     if (!state) return;
     setBusy(true);
-    try { await api.party.start(state.id); }
-    catch (err) { showToast(err.message, 'error'); }
+    try {
+      await api.party.start(state.id);
+      // Update UI immediately from the REST round-trip instead of waiting
+      // for the WS broadcast, and force the WS to re-attach to the
+      // now-fighting party.
+      await refresh();
+      reconnect();
+    } catch (err) { showToast(err.message, 'error'); }
     finally { setBusy(false); }
   };
 
@@ -109,8 +121,12 @@ export default function PartyPage() {
 
   const acceptInvite = async (partyId) => {
     setBusy(true);
-    try { await api.party.accept(partyId); await refresh(); showToast('Joined party!'); }
-    catch (err) { showToast(err.message, 'error'); }
+    try {
+      await api.party.accept(partyId);
+      await refresh();
+      reconnect(); // same fix as createParty — WS needs to resubscribe
+      showToast('Joined party!');
+    } catch (err) { showToast(err.message, 'error'); }
     finally { setBusy(false); }
   };
   const declineInvite = async (partyId) => {
@@ -227,6 +243,7 @@ function NoPartyView({ invites, onAccept, onDecline, onCreate, busy }) {
 
 // ── Lobby ───────────────────────────────────────────────────────────
 function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart, busy }) {
+  const pendingIds = new Set((state.pending_invites || []).map(p => p.invitee_id));
   const invitableFriends = friends.filter(f =>
     !state.members.some(m => m.user_id === f.id)
   );
@@ -257,25 +274,51 @@ function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart, bus
               </div>
             </div>
           ))}
+          {/* Ghost cards for pending invites so the host sees who they invited. */}
+          {(state.pending_invites || []).map(p => (
+            <div key={`pending-${p.invitee_id}`} className="card" style={{
+              padding: 8, textAlign: 'center', opacity: 0.55,
+              borderStyle: 'dashed', borderColor: 'var(--border)',
+            }}>
+              <div style={{ fontSize: 28, marginBottom: 6 }}>👤</div>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>{p.username}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                Lv {p.level} · ⏳ pending
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {isHost && invitableFriends.length > 0 && (
+      {isHost && (
         <div className="card" style={{ padding: 12 }}>
           <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: 8 }}>
             INVITE A FRIEND
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-            {invitableFriends.map(f => (
-              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 6, borderRadius: 6, background: 'var(--bg2)' }}>
-                <div style={{ flex: 1, fontSize: 13 }}>
-                  {f.username} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Lv {f.level}</span>
-                </div>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }}
-                  onClick={() => onInvite(f.id)}>Invite</button>
-              </div>
-            ))}
-          </div>
+          {invitableFriends.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 2px' }}>
+              No friends to invite — add some on the Friends page.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+              {invitableFriends.map(f => {
+                const invited = pendingIds.has(f.id);
+                return (
+                  <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 6, borderRadius: 6, background: 'var(--bg2)' }}>
+                    <div style={{ flex: 1, fontSize: 13 }}>
+                      {f.username} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Lv {f.level}</span>
+                    </div>
+                    {invited ? (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '4px 10px' }}>⏳ Invited</span>
+                    ) : (
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }}
+                        onClick={() => onInvite(f.id)}>Invite</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

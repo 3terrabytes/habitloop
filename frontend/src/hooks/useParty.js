@@ -1,20 +1,28 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { api, wsPartyUrl } from '../api';
 
-// Subscribes to live party state over WebSocket. Re-connects with backoff
-// if the socket drops (browser tab sleep, network blip, etc.). The hook
-// fetches an initial state snapshot via REST so the UI paints immediately
-// instead of waiting for the first STATE push.
+// Subscribes to live party state over WebSocket.
+//
+// Critical gotcha solved here: the server rejects a WS upgrade if the user
+// has no active party. That used to mean opening this page before creating
+// a party would put the socket into a 1/2/4/8/16s backoff, so creating a
+// party only "went live" 16s later (or required a page refresh). To fix
+// that we expose `reconnect()` and have the page call it right after any
+// mutation that changes party membership. We also clamp the no-party
+// backoff to a much shorter ceiling.
 //
 // Returns:
 //   state       — latest server-broadcast party snapshot, or null
-//   connected   — boolean, whether the WS is open
+//   connected   — boolean, whether the WS is currently open
 //   refresh()   — manual REST re-fetch (handy after a mutation)
+//   reconnect() — force-drop the WS and immediately re-open. Call after
+//                 create/accept/start so the server picks up the new party.
 export default function useParty() {
   const [state, setState] = useState(null);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
   const retryRef = useRef(0);
+  const pendingTimerRef = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -31,6 +39,12 @@ export default function useParty() {
   const connect = useCallback(() => {
     const token = localStorage.getItem('hq_token');
     if (!token) return;
+
+    // Clear any pending reconnect timer so we don't double-open.
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
 
     // Clean up any prior socket.
     if (wsRef.current) {
@@ -55,11 +69,13 @@ export default function useParty() {
 
     ws.onclose = () => {
       setConnected(false);
-      // Reconnect with backoff: 1s, 2s, 4s, 8s, 16s cap.
+      // Cap retries at 1, 2, 3, 4, 5 seconds — fast enough that creating a
+      // party feels instant, slow enough not to hammer the server when the
+      // user genuinely has no party.
       retryRef.current = Math.min(retryRef.current + 1, 5);
-      const delay = Math.pow(2, retryRef.current - 1) * 1000;
-      setTimeout(() => {
-        // Only reconnect if we still want a live socket.
+      const delay = retryRef.current * 1000;
+      pendingTimerRef.current = setTimeout(() => {
+        pendingTimerRef.current = null;
         if (wsRef.current === ws) connect();
       }, delay);
     };
@@ -67,10 +83,20 @@ export default function useParty() {
     ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
   }, []);
 
+  // Force an immediate reconnect. Used after create/accept/start.
+  const reconnect = useCallback(() => {
+    retryRef.current = 0;
+    connect();
+  }, [connect]);
+
   useEffect(() => {
     refresh();
     connect();
     return () => {
+      if (pendingTimerRef.current) {
+        clearTimeout(pendingTimerRef.current);
+        pendingTimerRef.current = null;
+      }
       if (wsRef.current) {
         try { wsRef.current.close(); } catch (e) { /* ignore */ }
         wsRef.current = null;
@@ -78,5 +104,5 @@ export default function useParty() {
     };
   }, [refresh, connect]);
 
-  return { state, connected, refresh };
+  return { state, connected, refresh, reconnect };
 }
