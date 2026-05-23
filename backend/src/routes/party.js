@@ -341,7 +341,21 @@ router.post('/:partyId/leave', async (req, res) => {
     await pushState(partyId);
     return res.json({ success: true });
   }
-  res.json({ success: true });
+
+  // Status is 'finished' (or 'cancelled') — user is dismissing the result
+  // screen. Drop their party_members row so the next /active poll returns
+  // null and the UI stays cleared. If they were the last member, also
+  // delete the party entirely so it doesn't linger in the DB.
+  await pool.query('DELETE FROM party_members WHERE party_id=$1 AND user_id=$2', [partyId, req.userId]);
+  const { rows: remaining } = await pool.query(
+    'SELECT COUNT(*)::int AS c FROM party_members WHERE party_id=$1', [partyId]
+  );
+  if (remaining[0].c === 0) {
+    await pool.query('DELETE FROM parties WHERE id=$1', [partyId]);
+  } else {
+    await pushState(partyId);
+  }
+  return res.json({ success: true });
 });
 
 // Host starts the fight. Rolls a boss, initialises member HP, sets phase.
