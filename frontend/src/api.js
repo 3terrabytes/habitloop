@@ -1,18 +1,37 @@
 const BASE = process.env.REACT_APP_API_URL || '';
 
-const req = async (method, path, body) => {
+// Default per-request timeout. Render's free tier can cold-start for 30-60s,
+// so we cap REST calls at 12s and let the UI handle the failure (usually by
+// rolling back an optimistic update). Without a timeout, a sleeping backend
+// looks like a frozen app because every button stays locked in busy state.
+const DEFAULT_TIMEOUT_MS = 12_000;
+
+const req = async (method, path, body, opts = {}) => {
   const token = localStorage.getItem('hq_token');
-  const res = await fetch(`${BASE}/api${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
+  const controller = new AbortController();
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE}/api${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Server slow to respond — try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 export const api = {

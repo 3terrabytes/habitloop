@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import PixelCharacter from '../components/PixelCharacter';
@@ -13,11 +13,13 @@ import useParty from '../hooks/useParty';
 
 export default function PartyPage() {
   const { user, refreshUser } = useAuth();
-  const { state, connected, refresh, reconnect } = useParty();
+  const { state, connected, refresh, reconnect, setOptimistic } = useParty();
+  // Per-friend invite-tap memory so the button flips to "Invited" instantly
+  // even before the server's pending_invites list refreshes.
+  const optimisticInvitesRef = useRef(new Set());
   const [invites, setInvites] = useState([]);
   const [friends, setFriends] = useState([]);
   const [loadout, setLoadout] = useState({ slotDetails: [] });
-  const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, kind = 'info') => {
@@ -25,22 +27,22 @@ export default function PartyPage() {
     setTimeout(() => setToast(null), 2400);
   };
 
-  // Pull invites + friends list periodically while we have NO party.
+  // Refresh invites + friends every 4s. Lightweight requests and the only
+  // way the invitee learns about a new invite (their useParty poll won't
+  // fire because they have no party yet).
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      try {
-        const [inv, fr] = await Promise.all([
-          api.party.invites().catch(() => []),
-          api.friends.list().catch(() => []),
-        ]);
-        if (cancelled) return;
-        setInvites(inv);
-        setFriends(fr);
-      } catch (e) { /* ignore */ }
+      const [inv, fr] = await Promise.all([
+        api.party.invites().catch(() => []),
+        api.friends.list().catch(() => []),
+      ]);
+      if (cancelled) return;
+      setInvites(inv);
+      setFriends(fr);
     };
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 4000);
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
@@ -66,72 +68,95 @@ export default function PartyPage() {
     && me?.is_alive
     && !me?.has_acted;
 
-  const createParty = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await api.party.create({ floor: 20 });
-      await refresh();
-      // The WS was rejected earlier ("no active party") and is sitting in
-      // backoff — force a fresh upgrade now that we have a party to join.
-      reconnect();
-      showToast('Party created. Invite some friends!');
-    } catch (err) { showToast(err.message, 'error'); }
-    finally { setBusy(false); }
+  // ── Action handlers ──────────────────────────────────────────────
+  // Every handler updates local state IMMEDIATELY (optimistic), fires the
+  // REST call in the background, and either confirms via the next poll/WS
+  // tick or rolls back on error. Buttons never wait for the network.
+
+  const createParty = () => {
+    // Optimistic stub party so the lobby renders before the REST call lands.
+    setOptimistic({
+      id: -1, host_id: user?.id, status: 'lobby', floor: 20,
+      members: [{
+        user_id: user?.id, username: user?.username, level: user?.level,
+        position: 0, hp: 0, max_hp: 0, is_alive: true, has_acted: false,
+        appearance: user || {}, equipped: {},
+      }],
+      pending_invites: [], log: [],
+    });
+    api.party.create({ floor: 20 })
+      .then(() => { refresh(); reconnect(); })
+      .catch(err => {
+        setOptimistic(null);
+        showToast(err.message, 'error');
+      });
   };
 
-  const invite = async (friendId) => {
+  const invite = (friendId) => {
     if (!state) return;
-    try { await api.party.invite(state.id, friendId); showToast('Invite sent'); }
-    catch (err) { showToast(err.message, 'error'); }
+    // Flip the button text instantly. Server pending_invites will overwrite
+    // this on the next refresh, which is fine because they agree.
+    optimisticInvitesRef.current.add(friendId);
+    const friend = friends.find(f => f.id === friendId);
+    setOptimistic(s => s ? {
+      ...s,
+      pending_invites: [
+        ...(s.pending_invites || []),
+        { invitee_id: friendId, username: friend?.username || '...', level: friend?.level || 1 },
+      ],
+    } : s);
+    api.party.invite(state.id, friendId)
+      .then(() => refresh())
+      .catch(err => {
+        optimisticInvitesRef.current.delete(friendId);
+        refresh();
+        showToast(err.message, 'error');
+      });
   };
 
-  const leave = async () => {
+  const leave = () => {
     if (!state) return;
-    setBusy(true);
-    try {
-      await api.party.leave(state.id);
-      await refresh();
-      reconnect(); // make sure WS detaches from the abandoned party
-    } catch (err) { showToast(err.message, 'error'); }
-    finally { setBusy(false); }
+    const partyId = state.id;
+    // Clear the UI immediately so the user feels the click.
+    setOptimistic(null);
+    api.party.leave(partyId)
+      .then(() => { refresh(); reconnect(); })
+      .catch(err => { refresh(); showToast(err.message, 'error'); });
   };
 
-  const start = async () => {
+  const start = () => {
     if (!state) return;
-    setBusy(true);
-    try {
-      await api.party.start(state.id);
-      // Update UI immediately from the REST round-trip instead of waiting
-      // for the WS broadcast, and force the WS to re-attach to the
-      // now-fighting party.
-      await refresh();
-      reconnect();
-    } catch (err) { showToast(err.message, 'error'); }
-    finally { setBusy(false); }
+    // Flip phase to 'fighting' locally so we render the battle scene now.
+    // The real boss/HP values arrive in the next REST/WS tick (sub-2s).
+    setOptimistic(s => s ? { ...s, status: 'fighting' } : s);
+    api.party.start(state.id)
+      .then(() => { refresh(); reconnect(); })
+      .catch(err => { refresh(); showToast(err.message, 'error'); });
   };
 
-  const submitAttack = useCallback(async (attackId) => {
-    if (!state || !myTurn || busy) return;
-    setBusy(true);
-    try { await api.party.turn(state.id, attackId); }
-    catch (err) { showToast(err.message, 'error'); }
-    finally { setBusy(false); }
-  }, [state, myTurn, busy]);
+  const submitAttack = useCallback((attackId) => {
+    if (!state || !myTurn) return;
+    // Mark our own member as has_acted=true so the turn passes visibly even
+    // before the server confirms. If it errors, refresh resets it.
+    setOptimistic(s => s ? {
+      ...s,
+      members: s.members.map(m =>
+        m.user_id === user?.id ? { ...m, has_acted: true } : m
+      ),
+    } : s);
+    api.party.turn(state.id, attackId)
+      .catch(err => { refresh(); showToast(err.message, 'error'); });
+  }, [state, myTurn, user, refresh, setOptimistic]);
 
-  const acceptInvite = async (partyId) => {
-    setBusy(true);
-    try {
-      await api.party.accept(partyId);
-      await refresh();
-      reconnect(); // same fix as createParty — WS needs to resubscribe
-      showToast('Joined party!');
-    } catch (err) { showToast(err.message, 'error'); }
-    finally { setBusy(false); }
+  const acceptInvite = (partyId) => {
+    api.party.accept(partyId)
+      .then(() => { refresh(); reconnect(); showToast('Joined party!'); })
+      .catch(err => showToast(err.message, 'error'));
+    setInvites(inv => inv.filter(i => i.party_id !== partyId));
   };
-  const declineInvite = async (partyId) => {
-    try { await api.party.decline(partyId); setInvites(inv => inv.filter(i => i.party_id !== partyId)); }
-    catch (err) { showToast(err.message, 'error'); }
+  const declineInvite = (partyId) => {
+    setInvites(inv => inv.filter(i => i.party_id !== partyId));
+    api.party.decline(partyId).catch(err => showToast(err.message, 'error'));
   };
 
   // ── Render ─────────────────────────────────────────────────────
@@ -142,8 +167,8 @@ export default function PartyPage() {
         <h2 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', margin: 0, fontSize: 22 }}>
           Raid Hall
         </h2>
-        <span style={{ fontSize: 11, color: connected ? '#86efac' : 'var(--text-muted)' }}>
-          {connected ? '● Live' : '○ Connecting...'}
+        <span style={{ fontSize: 11, color: connected ? '#86efac' : '#fbbf24' }}>
+          {connected ? '● Live' : '○ Polling'}
         </span>
       </header>
 
@@ -162,7 +187,6 @@ export default function PartyPage() {
           onAccept={acceptInvite}
           onDecline={declineInvite}
           onCreate={createParty}
-          busy={busy}
         />
       )}
 
@@ -175,7 +199,6 @@ export default function PartyPage() {
           onInvite={invite}
           onLeave={leave}
           onStart={start}
-          busy={busy}
         />
       )}
 
@@ -188,7 +211,6 @@ export default function PartyPage() {
           myTurn={myTurn}
           onAttack={submitAttack}
           onLeave={leave}
-          busy={busy}
         />
       )}
 
@@ -200,7 +222,7 @@ export default function PartyPage() {
 }
 
 // ── No-party view ───────────────────────────────────────────────────
-function NoPartyView({ invites, onAccept, onDecline, onCreate, busy }) {
+function NoPartyView({ invites, onAccept, onDecline, onCreate }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="card" style={{ padding: 18, textAlign: 'center' }}>
@@ -211,8 +233,8 @@ function NoPartyView({ invites, onAccept, onDecline, onCreate, busy }) {
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14 }}>
           Up to 4 heroes. One titan-tier boss. Take turns in formation while the boss singles out one of you each round.
         </div>
-        <button className="btn btn-primary" disabled={busy} onClick={onCreate} style={{ padding: '10px 22px' }}>
-          {busy ? '...' : 'Form Party'}
+        <button className="btn btn-primary" onClick={onCreate} style={{ padding: '10px 22px' }}>
+          Form Party
         </button>
       </div>
 
@@ -242,7 +264,7 @@ function NoPartyView({ invites, onAccept, onDecline, onCreate, busy }) {
 }
 
 // ── Lobby ───────────────────────────────────────────────────────────
-function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart, busy }) {
+function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart }) {
   const pendingIds = new Set((state.pending_invites || []).map(p => p.invitee_id));
   const invitableFriends = friends.filter(f =>
     !state.members.some(m => m.user_id === f.id)
@@ -256,9 +278,9 @@ function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart, bus
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Floor {state.floor} · {state.members.length}/4 heroes</div>
           </div>
           {isHost && (
-            <button className="btn btn-primary" disabled={busy || state.members.length < 1}
+            <button className="btn btn-primary" disabled={state.members.length < 1}
               onClick={onStart} style={{ padding: '8px 18px', fontSize: 13 }}>
-              {busy ? '...' : '⚔️ Begin Raid'}
+              ⚔️ Begin Raid
             </button>
           )}
         </div>
@@ -332,7 +354,7 @@ function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart, bus
 // Big visual layout: boss centered upper, party members in a row along the
 // lower edge. Highlight ring on whoever's turn it is. Each player sees their
 // own attack buttons; when it isn't their turn the buttons are disabled.
-function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave, busy }) {
+function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave }) {
   const boss = state.boss;
   const bossPct = state.boss_max_hp ? (state.boss_hp / state.boss_max_hp) * 100 : 0;
   const activeMember = state.members[state.turn_index];
@@ -432,7 +454,7 @@ function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave, busy 
         {/* Attack buttons */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
           {(loadout.slotDetails || []).map((a) => (
-            <button key={a.id} className="btn btn-primary" disabled={!myTurn || busy}
+            <button key={a.id} className="btn btn-primary" disabled={!myTurn}
               onClick={() => onAttack(a.id)}
               style={{
                 padding: '10px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2,
