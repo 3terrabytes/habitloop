@@ -1,7 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { initDB } = require('./db');
+const http = require('http');
+const { initDB, pool } = require('./db');
+const { attachToServer } = require('./realtime/partyHub');
 
 const app = express();
 app.use(cors());
@@ -19,10 +21,17 @@ app.use('/api/stats', require('./routes/stats'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/dungeon', require('./routes/dungeon'));
 app.use('/api/battles', require('./routes/battles'));
+app.use('/api/party', require('./routes/party'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3001;
+const server = http.createServer(app);
+
+// Attach the multiplayer-party WebSocket server to the same HTTP server so
+// it shares the Render port. Clients connect to wss://<host>/ws/party.
+attachToServer(server, { pool });
+
 initDB().then(() => {
-  app.listen(PORT, () => console.log(`🚀 Tickd backend on :${PORT}`));
+  server.listen(PORT, () => console.log(`Tickd backend on :${PORT}`));
 });

@@ -123,4 +123,28 @@ export const api = {
     upgradeAttack: (id) => req('POST', `/dungeon/attacks/${id}/upgrade`),
     learnAttack:   (id) => req('POST', `/dungeon/attacks/${id}/learn`),
   },
+  party: {
+    create:    (b) => req('POST', '/party', b),
+    active:    () => req('GET',  '/party/active'),
+    invites:   () => req('GET',  '/party/invites'),
+    invite:    (partyId, userId) => req('POST', `/party/${partyId}/invite/${userId}`),
+    accept:    (partyId) => req('POST', `/party/${partyId}/accept`),
+    decline:   (partyId) => req('POST', `/party/${partyId}/decline`),
+    leave:     (partyId) => req('POST', `/party/${partyId}/leave`),
+    start:     (partyId) => req('POST', `/party/${partyId}/start`),
+    turn:      (partyId, attackId) => req('POST', `/party/${partyId}/turn`, { attackId }),
+    myLoadout: (partyId) => req('GET',  `/party/${partyId}/my-loadout`),
+    state:     (partyId) => req('GET',  `/party/${partyId}`),
+  },
+};
+
+// Build the WebSocket URL for live party updates. Adapts the REST BASE
+// (https://api.x.com or '') into a ws(s) URL the user's JWT can connect to.
+export const wsPartyUrl = (token) => {
+  const baseRest = BASE || window.location.origin;
+  const url = new URL(baseRest);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = '/ws/party';
+  url.searchParams.set('token', token);
+  return url.toString();
 };

@@ -211,6 +211,51 @@ const initDB = async () => {
     );
     CREATE INDEX IF NOT EXISTS idx_battles_challenger ON battles(challenger_id, status);
     CREATE INDEX IF NOT EXISTS idx_battles_opponent   ON battles(opponent_id, status);
+
+    -- Multiplayer dungeon parties. A party progresses through phases:
+    --   lobby     = host is recruiting, members can leave/join
+    --   fighting  = boss fight active, broadcast over WebSocket
+    --   finished  = victory or wipe, kept around briefly for rewards screen
+    --   cancelled = host abandoned, members ejected
+    CREATE TABLE IF NOT EXISTS parties (
+      id            SERIAL PRIMARY KEY,
+      host_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      status        VARCHAR(20) DEFAULT 'lobby',
+      floor         INTEGER DEFAULT 20,
+      boss          JSONB,
+      boss_hp       INTEGER,
+      boss_max_hp   INTEGER,
+      turn_index    INTEGER DEFAULT 0,
+      round_count   INTEGER DEFAULT 0,
+      log           JSONB DEFAULT '[]'::jsonb,
+      winner        VARCHAR(10),
+      created_at    TIMESTAMP DEFAULT NOW(),
+      updated_at    TIMESTAMP DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_parties_host_status ON parties(host_id, status);
+
+    CREATE TABLE IF NOT EXISTS party_members (
+      party_id      INTEGER REFERENCES parties(id) ON DELETE CASCADE,
+      user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      position      INTEGER NOT NULL,
+      hp            INTEGER DEFAULT 0,
+      max_hp        INTEGER DEFAULT 0,
+      is_alive      BOOLEAN DEFAULT true,
+      has_acted     BOOLEAN DEFAULT false,
+      joined_at     TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (party_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_party_members_user ON party_members(user_id);
+
+    CREATE TABLE IF NOT EXISTS party_invites (
+      party_id      INTEGER REFERENCES parties(id) ON DELETE CASCADE,
+      inviter_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      invitee_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      status        VARCHAR(20) DEFAULT 'pending',
+      created_at    TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (party_id, invitee_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_party_invites_invitee ON party_invites(invitee_id, status);
   `);
   // Grant infinite gold + master admin to theDevs account (if it exists).
   // Master admin is the highest tier — only they can grant admin perms.
