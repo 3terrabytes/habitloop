@@ -17,6 +17,7 @@ import DungeonPage from './pages/DungeonPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import PartyPage from './pages/PartyPage';
 import ShopPage from './pages/ShopPage';
+import TavernPage from './pages/TavernPage';
 import UpdateModal from './components/UpdateModal';
 import FeaturesDebreifModal from './components/FeaturesDebreifModal';
 import SuspensionWarning from './components/SuspensionWarning';
@@ -64,6 +65,9 @@ function Layout({ children }) {
             </NavLink>
             <NavLink to="/shop" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
               Shop
+            </NavLink>
+            <NavLink to="/tavern" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
+              Tavern
             </NavLink>
             <NavLink to="/guild" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
               Friends
@@ -140,6 +144,8 @@ export default function App() {
           <Route path="/dungeon" element={<Protected><Layout><DungeonPage /></Layout></Protected>} />
           <Route path="/party" element={<Protected><Layout><PartyPage /></Layout></Protected>} />
           <Route path="/shop" element={<Protected><Layout><ShopPage /></Layout></Protected>} />
+          <Route path="/tavern" element={<Protected><Layout><TavernPage /></Layout></Protected>} />
+          <Route path="/tavern/:username" element={<Protected><Layout><TavernPage /></Layout></Protected>} />
           <Route path="/leaderboard" element={<Protected><Layout><LeaderboardPage /></Layout></Protected>} />
           <Route path="/users/:username" element={<ProfilePage />} />
           <Route path="/terms" element={<TermsPage />} />

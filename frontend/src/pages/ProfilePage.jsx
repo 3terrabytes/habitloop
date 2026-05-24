@@ -62,6 +62,12 @@ export default function ProfilePage() {
                   <div className="xp-bar-wrap"><div className="xp-bar-fill" style={{ width:`${xpPct}%` }}/></div>
                 </div>
               )}
+              <Link to={`/tavern/${profile.username}`} style={{
+                display: 'inline-block', marginTop: 10,
+                padding: '6px 14px', fontSize: 12, fontWeight: 600,
+                background: 'var(--bg3)', color: 'var(--gold)',
+                borderRadius: 6, textDecoration: 'none',
+              }}>🍺 Visit Tavern</Link>
             </div>
           </div>
 

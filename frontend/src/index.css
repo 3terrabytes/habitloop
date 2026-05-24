@@ -399,6 +399,32 @@ input {
   100% { transform: translate(-50%, -70px) scale(1.1) rotate(0); opacity: 0; }
 }
 
+/* ── Tavern scene ──────────────────────────────────────────────────────
+   Pet slowly drifts along the floor with a chained random walk. Single
+   keyframe, kept long so the room feels lived-in. */
+@keyframes tavern-pet-walk {
+  0%   { transform: translateX(0);    }
+  20%  { transform: translateX(60px); }
+  35%  { transform: translateX(40px) scaleX(-1); }
+  55%  { transform: translateX(180px) scaleX(-1); }
+  70%  { transform: translateX(160px); }
+  100% { transform: translateX(0);    }
+}
+.tavern-pet-wander { animation: tavern-pet-walk 22s ease-in-out infinite; }
+
+/* Animated-furniture shimmer for legendary+ pieces. Subtle and ambient
+   so a roomful of legendaries doesn't strobe. */
+@keyframes tavern-shimmer {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(253,224,71,0.0)); }
+  50%      { filter: drop-shadow(0 0 8px rgba(253,224,71,0.5)); }
+}
+@keyframes tavern-mythic {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(240,171,252,0.3)); }
+  50%      { filter: drop-shadow(0 0 14px rgba(240,171,252,0.9)); }
+}
+.tavern-furn.tavern-anim.rarity-legendary { animation: tavern-shimmer 2.4s ease-in-out infinite; }
+.tavern-furn.tavern-anim.rarity-mythic    { animation: tavern-mythic   2.0s ease-in-out infinite; }
+
 /* ── Hit burst particles ─────────────────────────────────────────────────
    Mounted briefly when an attack lands. Centre circle flashes, shards
    radiate outward. Drives off CSS variables set inline so each shard

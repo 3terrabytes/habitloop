@@ -22,6 +22,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/dungeon', require('./routes/dungeon'));
 app.use('/api/battles', require('./routes/battles'));
 app.use('/api/party', require('./routes/party'));
+app.use('/api/tavern', require('./routes/tavern'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

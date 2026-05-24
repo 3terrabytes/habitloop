@@ -164,6 +164,21 @@ const initDB = async () => {
       PRIMARY KEY (user_id, attack_id)
     );
 
+    -- Three saveable loadout presets per user. Each row snapshots an equip
+    -- set + 4-slot attack bar so the player can swap gear configs in one
+    -- click without re-equipping every piece.
+    CREATE TABLE IF NOT EXISTS user_loadout_presets (
+      user_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      slot      INTEGER NOT NULL,
+      name      VARCHAR(40),
+      weapon    VARCHAR(60),
+      armor     VARCHAR(60),
+      badge     VARCHAR(60),
+      companion VARCHAR(60),
+      attacks   TEXT[],
+      PRIMARY KEY (user_id, slot)
+    );
+
     -- Dungeon: how many bosses the player has cleared (ascension level).
     -- Surfaced on /auth/me and used to gate harder difficulties.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS dungeon_ascension INTEGER DEFAULT 0;

@@ -144,6 +144,15 @@ export const api = {
     upgradeAttack: (id) => req('POST', `/dungeon/attacks/${id}/upgrade`),
     learnAttack:   (id) => req('POST', `/dungeon/attacks/${id}/learn`),
   },
+  tavern: {
+    me:        () => req('GET',  '/tavern/me'),
+    visit:     (u) => req('GET',  `/tavern/${encodeURIComponent(u)}`),
+    place:     (b) => req('POST', '/tavern/place', b),
+    unplace:   (b) => req('DELETE', '/tavern/place', b),
+    settings:  (b) => req('PATCH', '/tavern/settings', b),
+    wave:      (u) => req('POST', `/tavern/${encodeURIComponent(u)}/wave`),
+    guestbook: (u, b) => req('POST', `/tavern/${encodeURIComponent(u)}/guestbook`, b),
+  },
   party: {
     create:    (b) => req('POST', '/party', b),
     active:    () => req('GET',  '/party/active'),
