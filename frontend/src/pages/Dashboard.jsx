@@ -40,14 +40,17 @@ export default function Dashboard() {
   return (
     <div style={styles.wrap}>
       {/* ── AVATAR SHOWCASE ─────────────────────────────────────── */}
+      {/* Whole frame is a link to /avatar so clicking the character takes
+          you straight to the customizer — most natural affordance. */}
       <div className="card" style={styles.avatarCard}>
-        <div style={styles.avatarFrame}>
+        <Link to="/avatar" style={styles.avatarFrame} className="avatar-frame-link" title="Edit appearance and gear">
           <PixelCharacter
             equipped={equipped}
             appearance={user || {}}
             size={260}
           />
-        </div>
+          <span style={styles.editPill} className="avatar-edit-pill">✏️ Edit</span>
+        </Link>
 
         <div style={styles.identity}>
           <BannerName
@@ -167,6 +170,21 @@ const styles = {
     background: 'radial-gradient(circle at 50% 60%, rgba(245,197,66,0.10), transparent 70%), var(--bg3)',
     boxShadow: '0 0 32px rgba(245,197,66,0.12), inset 0 0 24px rgba(0,0,0,0.3)',
     overflow: 'hidden',
+    position: 'relative',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+  },
+  editPill: {
+    position: 'absolute',
+    bottom: 12, right: 12,
+    background: 'rgba(15, 15, 25, 0.85)',
+    border: '1px solid var(--gold)',
+    color: 'var(--gold)',
+    fontSize: 11, fontWeight: 600,
+    padding: '4px 10px', borderRadius: 999,
+    opacity: 0, transition: 'opacity 0.18s ease',
+    pointerEvents: 'none',
   },
   identity: {
     width: '100%',

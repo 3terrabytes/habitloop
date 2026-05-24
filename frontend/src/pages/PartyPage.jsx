@@ -1,9 +1,14 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
-import PixelCharacter from '../components/PixelCharacter';
+import PixelCharacter, { PetSprite } from '../components/PixelCharacter';
 import BannerName from '../components/BannerName';
 import useParty from '../hooks/useParty';
+
+const ELEMENT_ICON = {
+  fire: '🔥', ice: '❄️', poison: '☠️', shadow: '🌑',
+  arcane: '✨', holy: '☀️', physical: '⚔️', lightning: '⚡',
+};
 
 // Multiplayer raid page. One of three phases:
 //   no party    — show "Form Party" + incoming invites
@@ -287,8 +292,9 @@ function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
           {state.members.map(m => (
             <div key={m.user_id} className="card" style={{ padding: 8, textAlign: 'center', borderColor: m.user_id === state.host_id ? 'var(--gold)' : undefined }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
-                <PixelCharacter appearance={m.appearance} equipped={m.equipped} size={70} />
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginBottom: 4, gap: 4 }}>
+                <PixelCharacter appearance={m.appearance} equipped={{ ...m.equipped, companion: null }} size={70} />
+                <PetSprite pet={m.equipped?.companion} playerSize={70} />
               </div>
               <BannerName username={m.username} banner={m.equipped?.banner} size="sm" />
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -359,6 +365,19 @@ function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave }) {
   const bossPct = state.boss_max_hp ? (state.boss_hp / state.boss_max_hp) * 100 : 0;
   const activeMember = state.members[state.turn_index];
 
+  // Watch for phase transitions in the log so we can flash a banner.
+  const [phaseBanner, setPhaseBanner] = useState(null);
+  const lastSeenPhaseRef = useRef(boss?.phase_index || 0);
+  useEffect(() => {
+    const idx = boss?.phase_index || 0;
+    if (idx > lastSeenPhaseRef.current) {
+      lastSeenPhaseRef.current = idx;
+      const id = Date.now();
+      setPhaseBanner({ id, text: `PHASE ${idx + 1}`, behavior: boss?.phases?.[idx]?.behavior });
+      setTimeout(() => setPhaseBanner(b => (b && b.id === id) ? null : b), 1600);
+    }
+  }, [boss?.phase_index, boss?.phases]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="dungeon-stage stage-tier-5 boss-room" style={{ padding: 0, position: 'relative', minHeight: 380, overflow: 'hidden' }}>
@@ -381,13 +400,36 @@ function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave }) {
               👑 RAID BOSS · FLOOR {state.floor}
             </div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>{boss?.name}</div>
+            {(boss?.weakTo?.length > 0 || boss?.resistantTo?.length > 0) && (
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.05em', marginTop: 2 }}>
+                {boss.weakTo?.length > 0 && (
+                  <span style={{ color: '#86efac', marginRight: 8 }}>
+                    WEAK {boss.weakTo.map(e => ELEMENT_ICON[e] || e).join('')}
+                  </span>
+                )}
+                {boss.resistantTo?.length > 0 && (
+                  <span style={{ color: '#94a3b8' }}>
+                    RESIST {boss.resistantTo.map(e => ELEMENT_ICON[e] || e).join('')}
+                  </span>
+                )}
+              </div>
+            )}
             <div style={{ maxWidth: 360, margin: '8px auto 0' }}>
               <BossBar value={state.boss_hp} max={state.boss_max_hp} />
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                {state.boss_hp} / {state.boss_max_hp} HP · {Math.round(bossPct)}%
+                {state.boss_hp} / {state.boss_max_hp} HP · {Math.round(bossPct)}% · Phase {(boss?.phase_index || 0) + 1}
               </div>
             </div>
           </div>
+
+          {phaseBanner && (
+            <div className="combo-banner" style={{
+              color: '#fda4af', borderColor: '#fda4af', top: '50%',
+            }}>
+              <span style={{ fontSize: 12, letterSpacing: '0.2em', opacity: 0.8 }}>{phaseBanner.behavior?.toUpperCase()}</span>
+              <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: '0.08em' }}>{phaseBanner.text}</span>
+            </div>
+          )}
           <div style={{ textAlign: 'center', fontSize: 110, lineHeight: 1, filter: 'drop-shadow(0 0 24px #ef444466)' }}>
             {boss?.sprite}
           </div>
@@ -416,10 +458,12 @@ function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave }) {
                   </div>
                 )}
                 <div style={{
+                  display: 'flex', alignItems: 'flex-end', gap: 4,
                   borderRadius: '50%',
                   boxShadow: isActive ? '0 0 24px #fde04788' : isMe ? '0 0 12px #6ee7b755' : 'none',
                 }}>
-                  <PixelCharacter appearance={m.appearance} equipped={m.equipped} size={86} />
+                  <PixelCharacter appearance={m.appearance} equipped={{ ...m.equipped, companion: null }} size={86} />
+                  <PetSprite pet={m.equipped?.companion} playerSize={86} />
                 </div>
                 <div style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: isMe ? '#6ee7b7' : 'var(--text)' }}>
                   {m.username}{isMe ? ' (you)' : ''}

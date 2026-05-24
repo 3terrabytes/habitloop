@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import PixelCharacter from '../components/PixelCharacter';
+import HitBurst from '../components/HitBurst';
+import ScreenFlash from '../components/ScreenFlash';
 
 // ── Tuning constants ──────────────────────────────────────────────────
 // Player max HP scales with level: 100 + 20 per level.
@@ -66,6 +68,41 @@ const PROJECTILE = {
   shockwave:{ emoji: '💥', color: '#fcd34d' },
 };
 
+// Element → emoji for the WEAK / RESIST badge next to monster nameplate.
+const ELEMENT_ICON = {
+  fire: '🔥', ice: '❄️', poison: '☠️', shadow: '🌑',
+  arcane: '✨', holy: '☀️', physical: '⚔️', lightning: '⚡',
+};
+
+// Attack-pair combos. Use as `COMBOS[prevId + '+' + currentId]`. When a
+// combo triggers, the second attack flashes a banner, deals bonus damage,
+// and (optionally) guarantees a crit. Pure frontend — server doesn't need
+// to know because the bonus is multiplicative and harmless.
+const COMBOS = {
+  'fireball+frost_nova':   { name: 'SHATTER',     bonus: 1.40, alwaysCrit: false, fx: 'shatter',   color: '#67e8f9' },
+  'frost_nova+fireball':   { name: 'STEAM BLAST', bonus: 1.30, alwaysCrit: false, fx: 'steam',     color: '#a5f3fc' },
+  'stab+backstab':         { name: 'EVISCERATE',  bonus: 1.25, alwaysCrit: true,  fx: 'crit',      color: '#fda4af' },
+  'poison_dart+venom_strike': { name: 'TOXIC SURGE', bonus: 1.35, alwaysCrit: false, fx: 'poison', color: '#86efac' },
+  'aimed_shot+volley':     { name: 'MARKSMAN',    bonus: 1.30, alwaysCrit: false, fx: 'arrow',     color: '#fde047' },
+  'guard+heavy_slash':     { name: 'COUNTER',     bonus: 1.40, alwaysCrit: true,  fx: 'parry',     color: '#fde047' },
+  'cleave+execute':        { name: 'BUTCHER',     bonus: 1.50, alwaysCrit: false, fx: 'heavy',     color: '#fca5a5' },
+  'smash+thunderclap':     { name: 'STORM SMASH', bonus: 1.40, alwaysCrit: true,  fx: 'lightning', color: '#fde047' },
+  'hex+chaos_blast':       { name: 'CHAOS HEX',   bonus: 1.40, alwaysCrit: false, fx: 'shadow',    color: '#c4b5fd' },
+  'soul_drain+death_blossom': { name: 'HARVEST',  bonus: 1.45, alwaysCrit: true,  fx: 'shadow',    color: '#a78bfa' },
+};
+
+// Cameos — wholesome non-events that fire ~5% per player turn. Pure flavor,
+// zero mechanical impact. The names are real users + the dev's own handle as
+// a wink to anyone reading.
+const CAMEOS = [
+  { log: '👋 Ollie appears, then disappears.',                 banner: 'Ollie appears, then disappears',     color: '#a5b4fc' },
+  { log: '🦊 Frooppy waves from the shadows.',                 banner: 'Frooppy waves',                       color: '#fda4af' },
+  { log: '👁️  oscarhann watches silently from above.',          banner: 'oscarhann is watching',               color: '#67e8f9' },
+  { log: '🌫️  A merchant walks by, but does not speak.',         banner: 'A silent merchant passes',            color: '#94a3b8' },
+  { log: '⚡ Distant thunder rolls through the chamber.',       banner: 'Distant thunder rolls',               color: '#a5b4fc' },
+  { log: '🪙 You hear coins jingle somewhere far away.',        banner: 'Coins jingle in the distance',        color: '#fde047' },
+];
+
 // Map node visuals
 const NODE_META = {
   start:    { icon: '🚪', label: 'Start',     color: '#94a3b8' },
@@ -109,6 +146,25 @@ export default function DungeonPage() {
   const [intent, setIntent] = useState(null);  // { kind, power, label, icon }
   const [turnCount, setTurnCount] = useState(0);
   const [petAnim, setPetAnim] = useState('');
+  // Tracks the last damaging attack the player used, for combo detection.
+  // Reset on new battle so cross-fight combos can't be cheesed.
+  const lastAttackIdRef = useRef(null);
+  const [comboBanner, setComboBanner] = useState(null); // { name, color, fx } | null
+  // Effects state: which target has an active hit burst, and the screen flash.
+  const [hitBurst, setHitBurst] = useState(null);   // { target: 'monster'|'player', element, id }
+  const [screenFlash, setScreenFlash] = useState(null); // { color, id }
+
+  // Helpers — keyed by id so concurrent triggers don't cancel each other.
+  const fireHitBurst = (target, element) => {
+    const id = Date.now() + Math.random();
+    setHitBurst({ target, element, id });
+    setTimeout(() => setHitBurst(b => (b && b.id === id) ? null : b), 700);
+  };
+  const fireScreenFlash = (color) => {
+    const id = Date.now() + Math.random();
+    setScreenFlash({ color, id });
+    setTimeout(() => setScreenFlash(f => (f && f.id === id) ? null : f), 420);
+  };
 
   // Inventory
   const [potions, setPotions] = useState([]);    // [{id, name, emoji, ...}, ...]
@@ -315,6 +371,7 @@ export default function DungeonPage() {
     setCooldowns({ 0: 0, 1: 0, 2: 0, 3: 0 });
     setStatuses({});
     setTurnCount(0);
+    lastAttackIdRef.current = null;
     setIntent(computeIntent(node.monster, 0));
     addLog(`🚪 You enter a chamber.`);
     setPhase('battle');
@@ -421,10 +478,41 @@ export default function DungeonPage() {
     } else {
       // Defbreak: attacks against a target with active def-break deal +25% damage.
       const defbreakBonus = (statuses.defbreak || 0) > 0 ? 1.25 : 1;
-      const mult = (strengthBuff ? strengthBuff : 1) * defbreakBonus;
-      const { dmg, crit } = rollDamage(attack, loadout.magic, mult);
+      // Combo lookup — pair the previous attack with this one. If it matches a
+      // recipe, fire the banner and apply the bonus / guaranteed-crit.
+      const comboKey = lastAttackIdRef.current ? `${lastAttackIdRef.current}+${attack.id}` : null;
+      const combo = comboKey ? COMBOS[comboKey] : null;
+      const comboBonus = combo ? combo.bonus : 1;
+      // Elemental matchup: 1.5x if attack element is in monster.weakTo, 0.7x
+      // if in monster.resistantTo. Backend stamps these onto monsters at boot.
+      const eEl = attack.element;
+      const elemMult = (monster.weakTo || []).includes(eEl) ? 1.5
+        : (monster.resistantTo || []).includes(eEl) ? 0.7
+        : 1;
+      const mult = (strengthBuff ? strengthBuff : 1) * defbreakBonus * comboBonus * elemMult;
+      let { dmg, crit } = rollDamage(attack, loadout.magic, mult);
+      if (combo?.alwaysCrit && !crit) {
+        // Force crit by doubling now (since rollDamage already applied variance).
+        dmg = Math.round(dmg * 2);
+        crit = true;
+      }
+      if (combo) {
+        const bannerId = Date.now() + Math.random();
+        setComboBanner({ name: combo.name, color: combo.color, fx: combo.fx, id: bannerId });
+        setTimeout(() => setComboBanner(b => (b && b.id === bannerId) ? null : b), 1200);
+        addLog(`✨ ${combo.name}! Combo bonus from ${lastAttackIdRef.current} → ${attack.id}.`);
+        shake();
+      }
       setMonsterAnim('battle-monster-hurt');
       popDamage('monster', dmg, { crit });
+      fireHitBurst('monster', attack.element || 'physical');
+      if (crit) {
+        fireScreenFlash(attack.element === 'holy' ? '#fef08a'
+          : attack.element === 'fire' ? '#fb923c'
+          : attack.element === 'ice' ? '#67e8f9'
+          : attack.element === 'shadow' ? '#a78bfa'
+          : '#fde047');
+      }
       if (crit || ['heavy', 'shockwave', 'lightning'].includes(attack.animation)) shake();
       newMonsterHp = Math.max(0, monsterHp - dmg);
       setMonsterHp(newMonsterHp);
@@ -478,12 +566,19 @@ export default function DungeonPage() {
       setMonsterAnim('');
     }
 
-    // ── Ollie cameo ──────────────────────────────────────────────
-    // ~4% chance per player turn for a wholesome non-event. He does nothing
-    // mechanically — just shows up, says hi, then leaves. No art on purpose.
-    if (Math.random() < 0.04) {
-      addLog('👋 Ollie appears, then disappears.');
-      flashBanner('Ollie appears, then disappears', '#a5b4fc', 1400);
+    // Record this attack for combo detection on the NEXT player turn.
+    // Heals + guards don't count — combos are chains of damaging moves.
+    if (attack.tag !== 'heal' && attack.tag !== 'defend') {
+      lastAttackIdRef.current = attack.id;
+    }
+
+    // ── Cameos ──────────────────────────────────────────────────
+    // ~4% chance per player turn for a wholesome non-event. They do nothing
+    // mechanically — just show up, say hi, then leave. No art on purpose.
+    if (Math.random() < 0.05) {
+      const cameo = CAMEOS[Math.floor(Math.random() * CAMEOS.length)];
+      addLog(cameo.log);
+      flashBanner(cameo.banner, cameo.color, 1400);
       await sleep(900);
     }
 
@@ -597,6 +692,7 @@ export default function DungeonPage() {
       if (guarding) { dmg = Math.round(dmg * 0.4); setGuarding(false); }
       if (defenseBuff && defenseBuff !== 0.4) { setDefenseBuff(null); }
       setPlayerAnim('battle-player-hurt');
+      fireHitBurst('player', monster.element || 'physical');
       popDamage('player', dmg, { crit: currentIntent.kind === 'heavy' });
       setHp(prev => {
         const next = Math.max(0, prev - dmg);
@@ -895,6 +991,17 @@ export default function DungeonPage() {
                   <span>{isBoss && '👑 '}{isElite && '🔥 '}{monster.name} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>· T{monster.tier}</span></span>
                 </div>
                 <HpBar value={monsterHp} max={monster.hp} color={isBoss ? '#fbbf24' : isElite ? '#fb923c' : '#ef4444'} />
+                {/* Element weaknesses / resistances so the player can pick attacks deliberately */}
+                {(monster.weakTo?.length > 0 || monster.resistantTo?.length > 0) && (
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 4, fontSize: 10, fontWeight: 600, letterSpacing: '0.05em' }}>
+                    {monster.weakTo?.length > 0 && (
+                      <span style={{ color: '#86efac' }}>WEAK {monster.weakTo.map(e => ELEMENT_ICON[e] || e).join('')}</span>
+                    )}
+                    {monster.resistantTo?.length > 0 && (
+                      <span style={{ color: '#94a3b8' }}>RESIST {monster.resistantTo.map(e => ELEMENT_ICON[e] || e).join('')}</span>
+                    )}
+                  </div>
+                )}
                 {/* Active status effects on the monster */}
                 {(statuses.burn > 0 || statuses.poison > 0 || statuses.stun > 0 || statuses.chill > 0 || statuses.defbreak > 0) && (
                   <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 4, flexWrap: 'wrap' }}>
@@ -935,6 +1042,7 @@ export default function DungeonPage() {
                 <div className="combat-light player" />
                 <div className={`${playerAnim || 'battle-idle'}`} style={{ position: 'relative' }}>
                   <PixelCharacter appearance={user || {}} equipped={inventory.equipped} size={130} />
+                  {hitBurst?.target === 'player' && <HitBurst element={hitBurst.element} />}
                   {damages.filter(d => d.target === 'player').map(d => (
                     <div key={d.id} className={`battle-damage ${d.heal ? 'heal' : ''} ${d.crit ? 'crit' : ''}`}>
                       {d.heal ? `+${d.value}` : d.value}
@@ -973,6 +1081,7 @@ export default function DungeonPage() {
                 filter: isBoss ? 'drop-shadow(0 0 24px #ef444466)' : isElite ? 'drop-shadow(0 0 18px #fb923c66)' : 'none',
               }}>
                 <span>{monster.sprite}</span>
+                {hitBurst?.target === 'monster' && <HitBurst element={hitBurst.element} />}
                 {damages.filter(d => d.target === 'monster').map(d => (
                   <div key={d.id} className={`battle-damage ${d.crit ? 'crit' : ''}`}>{d.value}</div>
                 ))}
@@ -1024,6 +1133,15 @@ export default function DungeonPage() {
                 {banner.text}
               </div>
             )}
+
+            {comboBanner && (
+              <div className="combo-banner" style={{ color: comboBanner.color, borderColor: comboBanner.color }}>
+                <span style={{ fontSize: 12, letterSpacing: '0.2em', opacity: 0.8 }}>COMBO</span>
+                <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: '0.08em' }}>{comboBanner.name}</span>
+              </div>
+            )}
+
+            {screenFlash && <ScreenFlash color={screenFlash.color} />}
           </div>
         </div>
 

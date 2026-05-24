@@ -36,6 +36,37 @@ const MONSTERS = [
   { id: 'void_knight', name: 'Void Knight',     tier: 5, hp: 250, power: 26, xp: 180, gold: 280, sprite: '🌌', element: 'arcane',    taunt: 'A figure of impossible darkness draws its blade.' },
 ];
 
+// Element matchup rules. Each monster's primary `element` determines what
+// damages it extra (weakTo) and what bounces off (resistantTo). Keeping
+// these centralised so we don't have to edit every monster individually.
+const ELEMENT_MATCHUPS = {
+  fire:     { weakTo: ['ice', 'physical'],    resistantTo: ['fire', 'arcane'] },
+  ice:      { weakTo: ['fire', 'lightning'],  resistantTo: ['ice', 'physical'] },
+  poison:   { weakTo: ['fire', 'holy'],       resistantTo: ['poison', 'shadow'] },
+  shadow:   { weakTo: ['holy', 'fire'],       resistantTo: ['shadow', 'poison'] },
+  arcane:   { weakTo: ['holy', 'physical'],   resistantTo: ['arcane', 'shadow'] },
+  holy:     { weakTo: ['shadow'],             resistantTo: ['holy', 'arcane'] },
+  physical: { weakTo: ['arcane', 'holy'],     resistantTo: ['physical'] },
+  lightning:{ weakTo: ['physical'],           resistantTo: ['lightning', 'arcane'] },
+};
+
+// Stamp every monster with the element-derived weakness data. Done once at
+// module load so callers don't pay the lookup cost.
+for (const m of MONSTERS) {
+  const matchup = ELEMENT_MATCHUPS[m.element] || { weakTo: [], resistantTo: [] };
+  m.weakTo      = matchup.weakTo;
+  m.resistantTo = matchup.resistantTo;
+}
+
+// Returns the damage multiplier for an attack element against a target's
+// weakTo/resistantTo lists. 1.5 super-effective, 0.7 resisted, 1.0 neutral.
+function elementMultiplier(attackElement, target) {
+  if (!attackElement || !target) return 1;
+  if ((target.weakTo || []).includes(attackElement))      return 1.5;
+  if ((target.resistantTo || []).includes(attackElement)) return 0.7;
+  return 1;
+}
+
 const monsterById = (id) => MONSTERS.find(m => m.id === id);
 
 // Scale a monster's HP / damage / XP reward to the player's level so combat
@@ -71,4 +102,4 @@ function pickIntent(monster, turn) {
   return { kind: 'strike', power: monster.power };
 }
 
-module.exports = { MONSTERS, monsterById, pickIntent, scaledMonster };
+module.exports = { MONSTERS, monsterById, pickIntent, scaledMonster, ELEMENT_MATCHUPS, elementMultiplier };

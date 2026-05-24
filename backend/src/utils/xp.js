@@ -94,4 +94,31 @@ const addGold = async (userId, amount) => {
   return { granted: rows[0].granted, gold: rows[0].gold };
 };
 
-module.exports = { xpForLevel, levelFromXP, levelTitle, addXP, addGold, rebirthMult, LEVEL_REWARD_BANNERS };
+// Award 1 pet-xp to the user's currently-equipped companion (if any) on
+// victory. At 10 pet-xp the pet is permanently evolved. Returns
+// { evolved, pet_xp } when a pet got the xp, otherwise null. Idempotent:
+// once a pet is evolved, further calls become no-ops.
+const awardPetWin = async (userId) => {
+  const { pool } = require('../db');
+  const { rows } = await pool.query(
+    'SELECT companion FROM user_equipped WHERE user_id = $1', [userId]
+  );
+  const petId = rows[0]?.companion;
+  if (!petId) return null;
+  const { rows: inv } = await pool.query(
+    'SELECT pet_xp, pet_evolved FROM user_inventory WHERE user_id=$1 AND item_id=$2',
+    [userId, petId]
+  );
+  if (!inv.length) return null;
+  if (inv[0].pet_evolved) return { evolved: true, pet_xp: inv[0].pet_xp };
+  const nextXp = (inv[0].pet_xp || 0) + 1;
+  const shouldEvolve = nextXp >= 10;
+  await pool.query(
+    `UPDATE user_inventory SET pet_xp=$1, pet_evolved=$2
+     WHERE user_id=$3 AND item_id=$4`,
+    [nextXp, shouldEvolve, userId, petId]
+  );
+  return { evolved: shouldEvolve, pet_xp: nextXp };
+};
+
+module.exports = { xpForLevel, levelFromXP, levelTitle, addXP, addGold, awardPetWin, rebirthMult, LEVEL_REWARD_BANNERS };

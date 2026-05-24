@@ -93,6 +93,10 @@ async function handleConnection(ws, userId, { pool }) {
     ws.send(JSON.stringify({ type: 'STATE', state }));
   } catch (e) { /* ignore */ }
 
+  // We intentionally do NOT accept any client → server messages over the
+  // socket. Every state change has to come through REST so server-side
+  // validation runs. WS is push-only.
+
   ws.on('close', () => leaveRoom(partyId, ws));
   ws.on('error', () => leaveRoom(partyId, ws));
 }

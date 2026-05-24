@@ -35,6 +35,12 @@ const initDB = async () => {
       UNIQUE(user_id, item_id)
     );
 
+    -- Pet evolution. Only meaningful for companion items in the inventory.
+    -- pet_xp ticks up by 1 per won battle while equipped; at 10 xp the pet
+    -- is permanently evolved (sprite swap, larger size, +10% in PET_SCALE).
+    ALTER TABLE user_inventory ADD COLUMN IF NOT EXISTS pet_xp      INTEGER DEFAULT 0;
+    ALTER TABLE user_inventory ADD COLUMN IF NOT EXISTS pet_evolved BOOLEAN DEFAULT false;
+
     CREATE TABLE IF NOT EXISTS user_equipped (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       weapon VARCHAR(60),
@@ -256,6 +262,53 @@ const initDB = async () => {
       PRIMARY KEY (party_id, invitee_id)
     );
     CREATE INDEX IF NOT EXISTS idx_party_invites_invitee ON party_invites(invitee_id, status);
+
+    -- Tavern: per-user private room with furniture placements and a small
+    -- visitor guestbook. Decorations are owned (user_tavern_furniture) and
+    -- separately placed onto tile coordinates (user_tavern_placements).
+    CREATE TABLE IF NOT EXISTS user_tavern (
+      user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      privacy        VARCHAR(10) DEFAULT 'public',
+      wall_color     VARCHAR(7)  DEFAULT '#4a3a2a',
+      floor_color    VARCHAR(7)  DEFAULT '#7a5a3a',
+      updated_at     TIMESTAMP   DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_tavern_furniture (
+      user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      furniture_id   VARCHAR(60) NOT NULL,
+      acquired_at    TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (user_id, furniture_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_tavern_placements (
+      id             SERIAL PRIMARY KEY,
+      user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      furniture_id   VARCHAR(60) NOT NULL,
+      tile_x         INTEGER NOT NULL,
+      tile_y         INTEGER NOT NULL,
+      rotation       INTEGER DEFAULT 0,
+      mounted_item   VARCHAR(60),
+      UNIQUE (user_id, tile_x, tile_y)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tavern_placements_user ON user_tavern_placements(user_id);
+
+    CREATE TABLE IF NOT EXISTS user_tavern_guestbook (
+      id             SERIAL PRIMARY KEY,
+      owner_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      visitor_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      visitor_name   VARCHAR(50),
+      message        VARCHAR(140),
+      created_at     TIMESTAMP DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tavern_guestbook_owner ON user_tavern_guestbook(owner_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS user_tavern_waves (
+      owner_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      visitor_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      last_wave_at   TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (owner_id, visitor_id)
+    );
   `);
   // Grant infinite gold + master admin to theDevs account (if it exists).
   // Master admin is the highest tier — only they can grant admin perms.

@@ -16,13 +16,14 @@
 const express = require('express');
 const { pool } = require('../db');
 const auth = require('../middleware/auth');
-const { addXP, addGold } = require('../utils/xp');
+const { addXP, addGold, awardPetWin } = require('../utils/xp');
 const { itemById, weaponClassOf, bonusesFrom } = require('../data/items');
 const {
   attackById, attacksForClass, defaultLoadoutFor,
   leveledPower, leveledHeal,
 } = require('../data/attacks');
 const { rollBoss } = require('../data/bosses');
+const { elementMultiplier } = require('../data/monsters');
 const { broadcastParty } = require('../realtime/partyHub');
 
 const router = express.Router();
@@ -109,10 +110,13 @@ async function getPartyState(partyId) {
             u.username, u.level, u.avatar_color, u.avatar_skin, u.avatar_hair, u.avatar_eyes,
             u.avatar_hair_style, u.avatar_gender, u.avatar_beard,
             e.weapon AS eq_weapon, e.armor AS eq_armor, e.banner AS eq_banner,
-            e.badge AS eq_badge, e.companion AS eq_companion, e.title AS eq_title
+            e.badge AS eq_badge, e.companion AS eq_companion, e.title AS eq_title,
+            ci.pet_xp AS companion_pet_xp, ci.pet_evolved AS companion_pet_evolved
        FROM party_members m
        JOIN users u ON u.id = m.user_id
        LEFT JOIN user_equipped e ON e.user_id = u.id
+       LEFT JOIN user_inventory ci
+              ON ci.user_id = u.id AND ci.item_id = e.companion
       WHERE m.party_id = $1
       ORDER BY m.position ASC`,
     [partyId]
@@ -139,7 +143,11 @@ async function getPartyState(partyId) {
       armor:     r.eq_armor     ? itemById(r.eq_armor)     : null,
       banner:    r.eq_banner    ? itemById(r.eq_banner)    : null,
       badge:     r.eq_badge     ? itemById(r.eq_badge)     : null,
-      companion: r.eq_companion ? itemById(r.eq_companion) : null,
+      companion: r.eq_companion ? {
+        ...itemById(r.eq_companion),
+        pet_xp:      r.companion_pet_xp || 0,
+        pet_evolved: !!r.companion_pet_evolved,
+      } : null,
       title:     r.eq_title     ? itemById(r.eq_title)     : null,
     },
   }));
@@ -368,13 +376,16 @@ router.post('/:partyId/start', async (req, res) => {
   if (party.status !== 'lobby') return res.status(400).json({ error: 'Already started' });
 
   const { rows: mRows } = await pool.query(
-    `SELECT m.*, u.level FROM party_members m JOIN users u ON u.id = m.user_id
+    `SELECT m.*, u.level, u.username FROM party_members m JOIN users u ON u.id = m.user_id
       WHERE m.party_id=$1 ORDER BY m.position ASC`,
     [partyId]
   );
   if (!mRows.length) return res.status(400).json({ error: 'No members' });
 
-  const boss = rollBoss(mRows.length, party.floor);
+  // Pick the host as the taunt subject — feels most natural since they
+  // pulled everyone into the fight.
+  const host = mRows.find(m => m.user_id === party.host_id) || mRows[0];
+  const boss = rollBoss(mRows.length, party.floor, host.username);
   await pool.query(
     `UPDATE parties SET status='fighting', boss=$1, boss_hp=$2, boss_max_hp=$2,
        turn_index=0, round_count=0,
@@ -445,9 +456,13 @@ router.post('/:partyId/turn', async (req, res) => {
     const base = power + magic * 0.5;
     const variance = 0.85 + Math.random() * 0.3;
     const crit = Math.random() < (0.12 + (bonuses.crit_pct || 0) / 100);
-    const dmg = Math.max(1, Math.round(base * variance * (crit ? 2 : 1) * (1 + dmgPct / 100)));
+    // Elemental matchup against the boss. Reuses the same table monsters
+    // use so the matchup matrix stays consistent across solo and raid.
+    const elementMult = elementMultiplier(attack.element, party.boss);
+    const dmg = Math.max(1, Math.round(base * variance * (crit ? 2 : 1) * (1 + dmgPct / 100) * elementMult));
     bossHp = Math.max(0, bossHp - dmg);
-    logLines.push(`${attack.emoji} ${me_username(mRows, req.userId)} hits ${party.boss.name} for ${dmg}${crit ? ' (CRIT)' : ''}.`);
+    const elemTag = elementMult > 1 ? ' (WEAK!)' : elementMult < 1 ? ' (resisted)' : '';
+    logLines.push(`${attack.emoji} ${me_username(mRows, req.userId)} hits ${party.boss.name} for ${dmg}${crit ? ' CRIT' : ''}${elemTag}.`);
   }
 
   // Persist player turn.
@@ -470,15 +485,31 @@ router.post('/:partyId/turn', async (req, res) => {
     for (const s of survivors) {
       await addXP(s.user_id, party.boss.xp);
       await addGold(s.user_id, party.boss.gold);
+      await awardPetWin(s.user_id);
     }
     await pushState(partyId);
     return res.json({ success: true, victory: true });
   }
 
-  // Append log + boss hp.
-  await pool.query(`UPDATE parties SET boss_hp=$1,
-                    log=(log || $2::jsonb), updated_at=NOW() WHERE id=$3`,
-    [bossHp, JSON.stringify(logLines), partyId]);
+  // Phase check — if this hit dropped the boss past a phase threshold,
+  // mutate the boss JSON to bump phase_index and power. The log line gets
+  // appended together with the player's hit log for atomicity.
+  const transition = detectPhaseTransition(party.boss, bossHp);
+  if (transition) {
+    logLines.push(transition.logLine);
+    const mutatedBoss = {
+      ...party.boss,
+      phase_index: transition.phaseIndex,
+      power: transition.newPower,
+    };
+    await pool.query(`UPDATE parties SET boss=$1, boss_hp=$2,
+                      log=(log || $3::jsonb), updated_at=NOW() WHERE id=$4`,
+      [mutatedBoss, bossHp, JSON.stringify(logLines), partyId]);
+  } else {
+    await pool.query(`UPDATE parties SET boss_hp=$1,
+                      log=(log || $2::jsonb), updated_at=NOW() WHERE id=$3`,
+      [bossHp, JSON.stringify(logLines), partyId]);
+  }
 
   await maybeAdvanceTurn(partyId);
   const state = await pushState(partyId);
@@ -569,6 +600,32 @@ function me_username(mRows, userId) {
 function target_username(mRows, userId) {
   const r = mRows.find(m => m.user_id === userId);
   return r?.username || `Player#${userId}`;
+}
+
+// If the boss's hp pct just dropped past a phase threshold (e.g. crossed 66%
+// or 33%), return the new phase index + its log line and the mutated power.
+// Returns null when no transition fired. The caller is responsible for
+// persisting the mutated boss JSON.
+function detectPhaseTransition(boss, newBossHp) {
+  if (!boss?.phases?.length) return null;
+  const max = boss.max_hp || newBossHp;
+  if (!max) return null;
+  const pct = newBossHp / max;
+  const currentIdx = boss.phase_index || 0;
+  // Find the highest phase whose atPct >= current ratio. Phases are listed
+  // in descending atPct: phase 0 = full HP, phase 2 = lowest threshold.
+  let nextIdx = currentIdx;
+  for (let i = currentIdx + 1; i < boss.phases.length; i++) {
+    if (pct <= boss.phases[i].atPct) nextIdx = i;
+  }
+  if (nextIdx === currentIdx) return null;
+  const newPhase = boss.phases[nextIdx];
+  return {
+    phaseIndex: nextIdx,
+    behavior: newPhase.behavior,
+    newPower: Math.round((boss.base_power || boss.power) * (newPhase.powerMult || 1)),
+    logLine: `💢 ${boss.name} enters Phase ${nextIdx + 1}! (${newPhase.behavior})`,
+  };
 }
 
 // ── Read endpoints ────────────────────────────────────────────────

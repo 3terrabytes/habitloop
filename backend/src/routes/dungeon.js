@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const auth = require('../middleware/auth');
-const { addXP, addGold } = require('../utils/xp');
+const { addXP, addGold, awardPetWin } = require('../utils/xp');
 const {
   ATTACKS, attackById, attacksForClass, DEFAULT_LOADOUT, defaultLoadoutFor,
   upgradeCostFor, maxLevelFor, leveledPower, leveledHeal,
@@ -318,6 +318,7 @@ router.post('/reward', async (req, res) => {
 
     await addXP(req.userId, finalXp);
     const goldRes = await addGold(req.userId, finalGold);
+    await awardPetWin(req.userId);
     if (goldRes) finalGold = goldRes.granted;
     // Bumping ascension on every boss kill — surfaces on /auth/me for the
     // entrance-screen ascension chip and future difficulty modifiers.
@@ -396,6 +397,7 @@ router.post('/survival/reward', async (req, res) => {
 
     await addXP(req.userId, finalXp);
     const goldRes = await addGold(req.userId, finalGold);
+    await awardPetWin(req.userId);
     if (goldRes) finalGold = goldRes.granted;
     // Update best wave if we just beat it.
     await pool.query(

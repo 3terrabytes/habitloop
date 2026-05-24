@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../db');
 const auth = require('../middleware/auth');
 const { ITEMS, PACKS, itemById, packById, packFullCost, packDiscount } = require('../data/items');
+const { FURNITURE, furnitureById } = require('../data/furniture');
 const router = express.Router();
 
 router.use(auth);
@@ -145,23 +146,86 @@ router.post('/shop/buy-pack/:packId', async (req, res) => {
   }
 });
 
+// ── Decorations (tavern furniture) ────────────────────────────────────
+// Mirrors /shop semantics but for furniture: catalog + ownership + gold.
+// Drop-only mythic pieces are filtered out unless the user has earned them.
+router.get('/furniture', async (req, res) => {
+  const { rows: ownedRows } = await pool.query(
+    `SELECT furniture_id FROM user_tavern_furniture WHERE user_id = $1`,
+    [req.userId]
+  );
+  const ownedIds = new Set(ownedRows.map(r => r.furniture_id));
+  const { rows: userRows } = await pool.query('SELECT gold FROM users WHERE id = $1', [req.userId]);
+  const visible = FURNITURE.filter(f => !f.dropOnly || ownedIds.has(f.id));
+  res.json({
+    gold: userRows[0]?.gold || 0,
+    items: visible,
+    ownedIds: Array.from(ownedIds),
+  });
+});
+
+router.post('/furniture/buy/:furnitureId', async (req, res) => {
+  const f = furnitureById(req.params.furnitureId);
+  if (!f) return res.status(404).json({ error: 'Furniture not found' });
+  if (f.dropOnly) return res.status(403).json({ error: 'This piece only drops from a specific boss.' });
+  const { rows } = await pool.query('SELECT gold, username FROM users WHERE id = $1', [req.userId]);
+  const user = rows[0];
+  const isTheDevs = user?.username?.toLowerCase() === 'thedevs';
+  if (!isTheDevs && (user?.gold || 0) < f.cost) {
+    return res.status(400).json({ error: 'Not enough gold' });
+  }
+  try {
+    await pool.query(
+      'INSERT INTO user_tavern_furniture (user_id, furniture_id) VALUES ($1, $2)',
+      [req.userId, f.id]
+    );
+    if (!isTheDevs) {
+      await pool.query('UPDATE users SET gold = gold - $1 WHERE id = $2', [f.cost, req.userId]);
+    }
+    const { rows: updated } = await pool.query('SELECT gold FROM users WHERE id = $1', [req.userId]);
+    res.json({ success: true, gold: updated[0].gold });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Already owned' });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get inventory + equipped (with full item data)
 router.get('/inventory', async (req, res) => {
-  const { rows: inv } = await pool.query('SELECT item_id FROM user_inventory WHERE user_id = $1', [req.userId]);
+  const { rows: inv } = await pool.query(
+    'SELECT item_id, pet_xp, pet_evolved FROM user_inventory WHERE user_id = $1',
+    [req.userId]
+  );
   const { rows: eq } = await pool.query('SELECT * FROM user_equipped WHERE user_id = $1', [req.userId]);
   const equippedRow = eq[0] || {};
 
-  // Resolve equipped slot ids to full item objects
+  // Pet-progress lookup keyed by item id so we can decorate the equipped
+  // companion + the inventory entries with their pet_xp / pet_evolved bits.
+  const petProgress = {};
+  for (const r of inv) {
+    if (r.pet_xp || r.pet_evolved) {
+      petProgress[r.item_id] = { pet_xp: r.pet_xp || 0, pet_evolved: !!r.pet_evolved };
+    }
+  }
+  const decorate = (item) => {
+    if (!item) return item;
+    const p = petProgress[item.id];
+    return p ? { ...item, pet_xp: p.pet_xp, pet_evolved: p.pet_evolved } : item;
+  };
+
   const equipped = {
     weapon:    equippedRow.weapon    ? itemById(equippedRow.weapon)    : null,
     armor:     equippedRow.armor     ? itemById(equippedRow.armor)     : null,
     banner:    equippedRow.banner    ? itemById(equippedRow.banner)    : null,
     badge:     equippedRow.badge     ? itemById(equippedRow.badge)     : null,
-    companion: equippedRow.companion ? itemById(equippedRow.companion) : null,
+    companion: equippedRow.companion ? decorate(itemById(equippedRow.companion)) : null,
     title:     equippedRow.title     ? itemById(equippedRow.title)     : null,
   };
 
-  res.json({ items: inv.map(r => itemById(r.item_id)).filter(Boolean), equipped });
+  res.json({
+    items: inv.map(r => decorate(itemById(r.item_id))).filter(Boolean),
+    equipped,
+  });
 });
 
 // Equip an item — validate slot is one of the 4 allowed values

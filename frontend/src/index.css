@@ -126,6 +126,13 @@ input {
   0%, 100% { transform: translateY(-1px) scale(1);    filter: drop-shadow(0 0 1px rgba(245,158,11,0.5)); }
   50%      { transform: translateY(-4px) scale(1.04); filter: drop-shadow(0 0 6px rgba(245,158,11,0.9)); }
 }
+/* Home avatar — hover state gives a subtle lift + reveals the "Edit" pill. */
+.avatar-frame-link:hover {
+  transform: scale(1.025);
+  box-shadow: 0 0 48px rgba(245, 197, 66, 0.22), inset 0 0 24px rgba(0, 0, 0, 0.3);
+}
+.avatar-frame-link:hover .avatar-edit-pill { opacity: 1; }
+
 @keyframes pet-frog-hop {
   0%, 60%, 100% { transform: translateY(0); }
   70%           { transform: translateY(-6px) scaleY(0.92); }
@@ -148,6 +155,49 @@ input {
 
 /* Sparkle accent — applied to a small dot in the SVG for rare+ pets. */
 .pet-sparkle     { animation: pet-sparkle 1.8s ease-in-out infinite; }
+
+/* ── Pet idle tricks ─────────────────────────────────────────────────────
+   Fired briefly via a class toggle in PixelCharacter's useEffect every
+   8-14 seconds. Each runs ONCE then is removed, so the underlying idle
+   animation resumes. Keyframes are tiny CSS-only — no sprite swaps. */
+@keyframes trick-stretch {
+  0%   { transform: scaleY(1); }
+  35%  { transform: scaleY(0.7) translateY(2px); }
+  70%  { transform: scaleY(1.18) translateY(-4px); }
+  100% { transform: scaleY(1); }
+}
+@keyframes trick-spin {
+  0%   { transform: rotate(0); }
+  50%  { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes trick-bounce {
+  0%, 100% { transform: translateY(0); }
+  20%      { transform: translateY(-6px); }
+  40%      { transform: translateY(0); }
+  60%      { transform: translateY(-3px); }
+  80%      { transform: translateY(0); }
+}
+@keyframes trick-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-2px) rotate(-3deg); }
+  40%      { transform: translateX(2px)  rotate(3deg); }
+  60%      { transform: translateX(-1px) rotate(-2deg); }
+  80%      { transform: translateX(1px)  rotate(2deg); }
+}
+@keyframes trick-yawn {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.15, 0.92); }
+  60%  { transform: scale(1.05, 1.05); }
+  100% { transform: scale(1); }
+}
+/* When a trick class is present, override the infinite idle so the trick
+   has the stage. Once removed, the underlying species animation resumes. */
+.pet.trick-stretch { animation: trick-stretch 0.9s ease-in-out 1; }
+.pet.trick-spin    { animation: trick-spin    0.6s ease-in-out 1; }
+.pet.trick-bounce  { animation: trick-bounce  0.8s ease-in-out 1; }
+.pet.trick-shake   { animation: trick-shake   0.7s ease-in-out 1; }
+.pet.trick-yawn    { animation: trick-yawn    1.0s ease-in-out 1; }
 
 .card {
   background: var(--bg2);
@@ -331,9 +381,56 @@ input {
   text-shadow: 0 0 10px rgba(0,0,0,0.8), 2px 2px 0 #7f1d1d;
   pointer-events: none;
   animation: float-dmg 1.1s ease-out forwards;
+  -webkit-text-stroke: 1px rgba(0,0,0,0.6);
+  letter-spacing: 0.02em;
 }
 .battle-damage.heal { color: #6ee7b7; text-shadow: 0 0 10px rgba(0,0,0,0.8), 2px 2px 0 #064e3b; }
-.battle-damage.crit { color: #fde047; font-size: 40px; text-shadow: 0 0 14px rgba(0,0,0,0.9), 2px 2px 0 #92400e; }
+.battle-damage.crit {
+  color: #fde047;
+  font-size: 52px;
+  -webkit-text-stroke: 2px rgba(0,0,0,0.8);
+  text-shadow: 0 0 22px #fbbf24, 0 0 6px #fef08a, 4px 4px 0 #92400e;
+  animation: crit-dmg 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes crit-dmg {
+  0%   { transform: translate(-50%, 0) scale(0.5) rotate(-8deg); opacity: 0; }
+  18%  { transform: translate(-50%, -8px) scale(1.5) rotate(4deg); opacity: 1; }
+  35%  { transform: translate(-50%, -10px) scale(1.15) rotate(-2deg); opacity: 1; }
+  100% { transform: translate(-50%, -70px) scale(1.1) rotate(0); opacity: 0; }
+}
+
+/* ── Hit burst particles ─────────────────────────────────────────────────
+   Mounted briefly when an attack lands. Centre circle flashes, shards
+   radiate outward. Drives off CSS variables set inline so each shard
+   can have its own direction without spawning a class per shard. */
+@keyframes hit-shard-fly {
+  0%   { transform: translate(0, 0) rotate(0);            opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; }
+}
+@keyframes hit-core-flash {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  60%  { transform: translate(-50%, -50%) scale(2.4); opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(3.2); opacity: 0; }
+}
+.hit-burst { transform: translate(-50%, -50%); }
+.hit-shard {
+  position: absolute; left: 0; top: 0;
+  border-radius: 50%;
+  animation: hit-shard-fly 0.65s cubic-bezier(0.2, 0.7, 0.4, 1) forwards;
+}
+.hit-core {
+  position: absolute; left: 50%; top: 50%;
+  width: 14px; height: 14px; border-radius: 50%;
+  animation: hit-core-flash 0.35s ease-out forwards;
+}
+
+/* ── Stage flash overlay ─────────────────────────────────────────────── */
+@keyframes screen-flash-fade {
+  0%   { opacity: 1; }
+  60%  { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+.screen-flash { animation: screen-flash-fade 0.4s ease-out forwards; }
 
 /* Screen-flash on big hits */
 @keyframes screen-flash {
@@ -385,6 +482,28 @@ input {
   letter-spacing: 0.08em; pointer-events: none; z-index: 5;
   animation: banner-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
   text-shadow: 0 0 20px rgba(0,0,0,0.9), 4px 4px 0 rgba(0,0,0,0.5);
+}
+
+/* Combo banner — fires on chained attacks, sits slightly lower than the
+   victory/encounter banner so they can co-exist if both fire close together. */
+@keyframes combo-pop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6) rotate(-4deg); }
+  25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(3deg); }
+  60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.02) rotate(-1deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.08) rotate(0deg); }
+}
+.combo-banner {
+  position: absolute; top: 38%; left: 50%;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 28px;
+  background: rgba(15, 15, 25, 0.78);
+  border: 2px solid currentColor;
+  border-radius: 14px;
+  font-family: 'Cinzel', serif;
+  pointer-events: none; z-index: 6;
+  box-shadow: 0 0 40px currentColor, inset 0 0 18px rgba(255, 255, 255, 0.06);
+  animation: combo-pop 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  text-shadow: 0 0 8px currentColor, 2px 2px 0 rgba(0,0,0,0.6);
 }
 
 /* Dungeon stage background: stone gradient with subtle ambient pulse */

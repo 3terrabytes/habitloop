@@ -11,6 +11,49 @@
 //
 // Everything is optional — anything missing falls back to a sensible default.
 
+import { useEffect, useRef, useState } from 'react';
+
+// Pet idle tricks dispatched every 8-14s. Each ticks a CSS class onto the
+// pet's <g> for the duration of its keyframe, then removes it so the species
+// idle resumes. Used by both inline (PixelCharacter) and standalone
+// (PetSprite) renderings so pets feel alive wherever they appear.
+const TRICKS = [
+  { cls: 'trick-stretch', ms: 900 },
+  { cls: 'trick-bounce',  ms: 800 },
+  { cls: 'trick-shake',   ms: 700 },
+  { cls: 'trick-yawn',    ms: 1000 },
+  { cls: 'trick-spin',    ms: 600 },
+];
+function useRandomPetTrick(active) {
+  const [trick, setTrick] = useState(null);
+  const timeoutRef = useRef(null);
+  useEffect(() => {
+    if (!active) return undefined;
+    let cancelled = false;
+    const schedule = () => {
+      // 8-14 seconds between tricks. Random for each pet so a row of pets
+      // doesn't perform in unison.
+      const delay = 8000 + Math.random() * 6000;
+      timeoutRef.current = setTimeout(() => {
+        if (cancelled) return;
+        const pick = TRICKS[Math.floor(Math.random() * TRICKS.length)];
+        setTrick(pick.cls);
+        setTimeout(() => {
+          if (cancelled) return;
+          setTrick(null);
+          schedule();
+        }, pick.ms);
+      }, delay);
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [active]);
+  return trick;
+}
+
 export const HAIR_STYLES = [
   { id: 0, name: 'Spiky' },
   { id: 1, name: 'Long' },
@@ -65,6 +108,9 @@ export default function PixelCharacter({
   const bannerId    = banner ? `banner-${banner.id || 'x'}-${size}` : null;
   const isLegendaryArmor = armor && armor.rarity === 'legendary';
   const isEpicArmor      = armor && armor.rarity === 'epic';
+
+  // Random pet trick — fires every 8-14s while the pet is mounted.
+  const trick = useRandomPetTrick(!!companion);
 
   return (
     <div style={{ width: size, height: size, imageRendering: 'pixelated', flexShrink: 0, overflow: 'visible' }}>
@@ -238,16 +284,28 @@ export default function PixelCharacter({
           </g>
         )}
 
-        {/* ── COMPANION (pet) — pixel-art, left of body, same ground plane.
-            Scaled 1.5x around (14, 74) so pets read at a more game-y size. */}
+        {/* ── COMPANION (pet) — inline on the player SVG. Used on the home
+            screen so the home avatar shows the pet at a glance. Battle and
+            lobby scenes use <PetSprite /> below for a much larger sprite. */}
         {companion && (
-          <g className={`pet pet-${companion.id}${cheering ? ' pet-cheer' : ''}`}
+          <g className={`pet pet-${companion.id}${cheering ? ' pet-cheer' : ''}${trick ? ' ' + trick : ''}${companion.pet_evolved ? ' pet-evolved' : ''}`}
              shapeRendering="crispEdges"
              transform="translate(-7 -37) scale(1.5)"
              style={{ transformOrigin: 'center' }}>
-            <title>{companion.name}: {companion.desc}</title>
+            <title>{companion.name}{companion.pet_evolved ? ' ⭐ EVOLVED' : ''}: {companion.desc}</title>
             <ellipse cx="14" cy="74" rx="6" ry="1.5" fill="rgba(0,0,0,0.35)" />
             {renderPet(companion.id, cheering)}
+            {/* Evolved pet: gold crown above head + warm aura. Drawn outside
+                the pet group so it survives trick transforms. */}
+            {companion.pet_evolved && (
+              <g>
+                <rect x="11" y="59" width="6" height="1" fill="#fde047" />
+                <rect x="11" y="58" width="1" height="1" fill="#fde047" />
+                <rect x="13" y="57" width="1" height="2" fill="#fde047" />
+                <rect x="16" y="58" width="1" height="1" fill="#fde047" />
+                <ellipse cx="14" cy="68" rx="9" ry="9" fill="none" stroke="#fde047" strokeOpacity="0.25" />
+              </g>
+            )}
             {/* Rare+ pets get an animated sparkle dot drifting above them. */}
             {companion.rarity && companion.rarity !== 'common' && (
               <g className="pet-sparkle">
@@ -258,6 +316,64 @@ export default function PixelCharacter({
             )}
           </g>
         )}
+      </svg>
+    </div>
+  );
+}
+
+// ── Pet size table (relative to the partnered player size) ───────────────
+// Cap at 0.5 so pets never dwarf the player. Evolved pets get +0.10. Used
+// by <PetSprite /> in battle / lobby scenes where the pet needs to be big
+// enough to read its own emote animation.
+const PET_SCALE = {
+  pet_cat:    0.60,
+  pet_fox:    0.65,
+  pet_owl:    0.75,
+  pet_frog:   0.40,
+  pet_dragon: 1.00,
+};
+function petSizeFor(pet, playerSize) {
+  if (!pet) return 0;
+  const baseMult = PET_SCALE[pet.id] || 0.60;
+  const evolveBonus = pet.pet_evolved ? 0.10 : 0;
+  const effective = Math.min(1.0, baseMult + evolveBonus);
+  return Math.round(playerSize * 0.5 * effective);
+}
+
+// Standalone pet sprite — render the pet outside the player SVG so it can
+// be sized freely. Used in raid lobby + battle scenes.
+//   <PetSprite pet={equipped.companion} playerSize={130} cheering={false} />
+export function PetSprite({ pet, playerSize = 120, cheering = false }) {
+  // Hook must run unconditionally — bail by rendering null AFTER it.
+  const trick = useRandomPetTrick(!!pet);
+  if (!pet) return null;
+  const size = petSizeFor(pet, playerSize);
+  if (size <= 0) return null;
+  return (
+    <div style={{
+      width: size, height: size, position: 'relative',
+      imageRendering: 'pixelated', flexShrink: 0, overflow: 'visible',
+    }}
+    title={pet.name}>
+      <svg
+        width={size} height={size}
+        viewBox="0 0 28 16"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ imageRendering: 'pixelated', display: 'block', overflow: 'visible' }}
+        shapeRendering="crispEdges"
+      >
+        <g className={`pet pet-${pet.id}${cheering ? ' pet-cheer' : ''}${trick ? ' ' + trick : ''}`}
+           transform="translate(-2 -58)"
+           style={{ transformOrigin: 'center' }}>
+          {renderPet(pet.id, cheering)}
+          {pet.rarity && pet.rarity !== 'common' && (
+            <g className="pet-sparkle">
+              <rect x="19" y="60" width="1" height="1" fill={sparkleColor(pet.rarity)} />
+              <rect x="20" y="59" width="1" height="1" fill={sparkleColor(pet.rarity)} opacity="0.7" />
+              <rect x="18" y="59" width="1" height="1" fill={sparkleColor(pet.rarity)} opacity="0.7" />
+            </g>
+          )}
+        </g>
       </svg>
     </div>
   );
