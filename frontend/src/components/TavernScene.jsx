@@ -1,41 +1,51 @@
-// Renders a tavern room as an SVG scene. Used by both /tavern (own) and
-// /tavern/:username (visit). Pure renderer — all interactivity lives in
-// the parent (TavernPage / VisitPage).
+// Renders a tavern room as an SVG scene with a panning camera, walkable
+// avatars, multi-visitor presence, and a 50% opacity placement ghost.
 //
-// Layout: 12x8 tile grid, each tile = 32x32px in viewBox coords.
-// Stage: 384 (12*32) wide × 256 (8*32) tall, plus a horizon strip above
-// for the windowed back wall (so the windows can sit above the floor
-// tiles without claiming a grid slot).
+// The world is wider than the viewport so the camera scrolls horizontally
+// to follow the player. World: 24 tiles wide × 8 tiles tall. Viewport: 15
+// tiles wide × 8 tall, plus a back-wall horizon strip above.
+//
+// All interactivity (input, placement decisions) lives in the parent. The
+// scene is a pure renderer that takes pre-computed state.
 //
 // Props:
-//   placements        — array from /tavern API
-//   settings          — { wall_color, floor_color }
-//   owner             — { appearance, equipped, username, level }
-//   editing           — bool, draws the tile-grid overlay
-//   selectedTile      — { x, y } | null, highlighted tile (placement preview)
-//   onTileClick(x,y)  — called when a tile in the floor is clicked
-//   onPlacementClick(placement) — clicked an existing placement
-//   highlightedFurnitureSize — { w, h } | null, shows footprint of pending placement
-//   localHour         — 0..23 used to colour the skybox; defaults to local time
-//   petWander         — bool, animate the pet across the floor (default true)
+//   placements   — array from /tavern API
+//   settings     — { wall_color, floor_color }
+//   owner        — { appearance, equipped, username, level }
+//   visitors     — array of { userId, username, level, appearance, equipped, x, y, facing }
+//                  including the local player. The local player's userId
+//                  is signalled via `localUserId`.
+//   localUserId  — the userId whose avatar should be "you" (highlight ring)
+//   cameraX      — current camera x in world coords (clamped by parent)
+//   editing      — bool, draws the tile-grid overlay
+//   ghost        — { furniture, tile_x, tile_y, rotation } | null
+//                  rendered at 50% opacity at the ghost tile; click to place
+//   onTileClick  — (x, y) called when a floor tile is clicked
+//   onPlacementClick — (placement) called when an existing piece is clicked
+//   speech       — { userId, text, expiresAt } | null
+//   localHour    — 0..23 used to colour the skybox; defaults to local time
+//   onMouseTile  — (x, y) called as the mouse moves across floor tiles
+//                  (used by the parent to update the ghost position)
 
 import PixelCharacter, { PetSprite } from './PixelCharacter';
+import FurnitureSprite from './FurnitureSprite';
 
-const TILE = 32;
-const COLS = 12;
-const ROWS = 8;
-const STAGE_W = TILE * COLS;
-const FLOOR_H = TILE * ROWS;
-const HORIZON = 96; // height of the back wall above the floor
+export const TILE = 32;
+export const WORLD_COLS = 24;
+export const ROWS = 8;
+export const VIEW_COLS = 15;
+export const WORLD_W = TILE * WORLD_COLS;
+export const VIEW_W  = TILE * VIEW_COLS;
+export const FLOOR_H = TILE * ROWS;
+export const HORIZON = 96;
+export const TOTAL_H = FLOOR_H + HORIZON;
 
-// Sky gradient stops keyed to hour-of-day buckets. The window panes sample
-// from these so the room subtly shifts mood with real time.
 const SKY = [
-  { until: 5,  from: '#0b1c3a', to: '#1c1043' }, // deep night
-  { until: 8,  from: '#fcd34d', to: '#fb923c' }, // dawn
-  { until: 17, from: '#bae6fd', to: '#fef3c7' }, // day
-  { until: 20, from: '#fb923c', to: '#7c3aed' }, // dusk
-  { until: 24, from: '#1c1043', to: '#0b1c3a' }, // night
+  { until: 5,  from: '#0b1c3a', to: '#1c1043' },
+  { until: 8,  from: '#fcd34d', to: '#fb923c' },
+  { until: 17, from: '#bae6fd', to: '#fef3c7' },
+  { until: 20, from: '#fb923c', to: '#7c3aed' },
+  { until: 24, from: '#1c1043', to: '#0b1c3a' },
 ];
 function skyFor(hour) {
   for (const s of SKY) if (hour < s.until) return s;
@@ -46,23 +56,24 @@ export default function TavernScene({
   placements = [],
   settings = { wall_color: '#4a3a2a', floor_color: '#7a5a3a' },
   owner = null,
+  visitors = [],
+  localUserId = null,
+  cameraX = 0,
   editing = false,
-  selectedTile = null,
+  ghost = null,
   onTileClick = null,
   onPlacementClick = null,
-  highlightedFurnitureSize = null,
+  onMouseTile = null,
+  speech = null,
   localHour,
-  petWander = true,
 }) {
   const hour = typeof localHour === 'number' ? localHour : new Date().getHours();
   const sky = skyFor(hour);
-
-  const totalH = FLOOR_H + HORIZON;
-  const wallDark = darken(settings.wall_color, 25);
+  const wallDark  = darken(settings.wall_color, 25);
   const floorDark = darken(settings.floor_color, 20);
 
   // Pre-build a placement lookup keyed by `${x},${y}` so the floor tile
-  // renderer can check if a tile is occupied.
+  // renderer can mark occupied tiles in edit mode.
   const occupied = new Set();
   for (const p of placements) {
     const w = p.furniture?.size?.w || 1;
@@ -73,26 +84,64 @@ export default function TavernScene({
       }
     }
   }
-
-  // Highlighted footprint for "about to place" preview.
-  const highlightSet = new Set();
-  if (selectedTile && highlightedFurnitureSize) {
-    for (let dx = 0; dx < highlightedFurnitureSize.w; dx++) {
-      for (let dy = 0; dy < highlightedFurnitureSize.h; dy++) {
-        highlightSet.add(`${selectedTile.x + dx},${selectedTile.y + dy}`);
+  const ghostSet = new Set();
+  if (ghost) {
+    const w = ghost.furniture.size?.w || 1;
+    const h = ghost.furniture.size?.h || 1;
+    for (let dx = 0; dx < w; dx++) {
+      for (let dy = 0; dy < h; dy++) {
+        ghostSet.add(`${ghost.tile_x + dx},${ghost.tile_y + dy}`);
       }
     }
   }
+  const ghostBlocked = ghost && [...ghostSet].some(k => occupied.has(k));
+
+  // Convert SVG client coords -> tile coords. Used by the parent to update
+  // the ghost as the mouse moves. We attach the handler at the SVG level
+  // and let it resolve which tile the cursor is over.
+  const handleMouseMove = (e) => {
+    if (!onMouseTile) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    // viewBox is VIEW_W wide and TOTAL_H tall, scaled to the rect.
+    const sx = ((e.clientX - rect.left) / rect.width) * VIEW_W + cameraX;
+    const sy = ((e.clientY - rect.top)  / rect.height) * TOTAL_H;
+    if (sy < HORIZON) return;
+    const tx = Math.floor(sx / TILE);
+    const ty = Math.floor((sy - HORIZON) / TILE);
+    if (tx >= 0 && tx < WORLD_COLS && ty >= 0 && ty < ROWS) {
+      onMouseTile(tx, ty);
+    }
+  };
+
+  const handleClick = (e) => {
+    if (!onTileClick) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const sx = ((e.clientX - rect.left) / rect.width) * VIEW_W + cameraX;
+    const sy = ((e.clientY - rect.top)  / rect.height) * TOTAL_H;
+    if (sy < HORIZON) return;
+    const tx = Math.floor(sx / TILE);
+    const ty = Math.floor((sy - HORIZON) / TILE);
+    if (tx < 0 || tx >= WORLD_COLS || ty < 0 || ty >= ROWS) return;
+    onTileClick(tx, ty);
+  };
 
   return (
     <div className="tavern-stage" style={{ position: 'relative', width: '100%', maxWidth: 720, margin: '0 auto' }}>
       <svg
-        viewBox={`0 0 ${STAGE_W} ${totalH}`}
+        viewBox={`${cameraX} 0 ${VIEW_W} ${TOTAL_H}`}
         width="100%"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ display: 'block', imageRendering: 'pixelated', borderRadius: 12, border: '1px solid var(--border)' }}
+        style={{
+          display: 'block', imageRendering: 'pixelated',
+          borderRadius: 12, border: '1px solid var(--border)',
+          background: '#0a0a14',
+          cursor: ghost ? 'cell' : (editing ? 'crosshair' : 'default'),
+        }}
+        onMouseMove={handleMouseMove}
+        onClick={handleClick}
       >
-        {/* ── Back wall ────────────────────────────────────────────── */}
         <defs>
           <linearGradient id="tavern-wall-grad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"  stopColor={settings.wall_color} />
@@ -112,76 +161,123 @@ export default function TavernScene({
           </radialGradient>
         </defs>
 
-        <rect x="0" y="0" width={STAGE_W} height={HORIZON} fill="url(#tavern-wall-grad)" />
+        {/* Back wall spans the whole world so panning shows continuous wall */}
+        <rect x="0" y="0" width={WORLD_W} height={HORIZON} fill="url(#tavern-wall-grad)" />
 
-        {/* Window panes — three windows along the back wall showing the sky. */}
-        {[80, 180, 280].map((wx, i) => (
-          <g key={i}>
-            <rect x={wx} y={20} width={48} height={56} fill="url(#tavern-sky-grad)" />
-            <rect x={wx - 2} y={18} width={52} height={4}  fill={wallDark} />
-            <rect x={wx - 2} y={74} width={52} height={4}  fill={wallDark} />
-            {/* Cross frame */}
-            <line x1={wx + 24} y1={20} x2={wx + 24} y2={76} stroke={wallDark} strokeWidth="2" />
-            <line x1={wx} y1={48} x2={wx + 48} y2={48} stroke={wallDark} strokeWidth="2" />
-            {/* Stars at night */}
-            {(hour < 6 || hour >= 20) && (
-              <>
-                <rect x={wx + 8}  y={28} width="1" height="1" fill="#fff" />
-                <rect x={wx + 18} y={36} width="1" height="1" fill="#fff" />
-                <rect x={wx + 36} y={30} width="1" height="1" fill="#fff" />
-                <rect x={wx + 42} y={60} width="1" height="1" fill="#fff" />
-              </>
-            )}
-          </g>
+        {/* Windows along the back wall — every 4 tiles. */}
+        {Array.from({ length: 6 }).map((_, i) => {
+          const wx = 60 + i * 128;
+          return (
+            <g key={i}>
+              <rect x={wx} y={20} width={48} height={56} fill="url(#tavern-sky-grad)" />
+              <rect x={wx - 2} y={18} width={52} height={4}  fill={wallDark} />
+              <rect x={wx - 2} y={74} width={52} height={4}  fill={wallDark} />
+              <line x1={wx + 24} y1={20} x2={wx + 24} y2={76} stroke={wallDark} strokeWidth="2" />
+              <line x1={wx} y1={48} x2={wx + 48} y2={48} stroke={wallDark} strokeWidth="2" />
+              {(hour < 6 || hour >= 20) && (
+                <>
+                  <rect x={wx + 8}  y={28} width="1" height="1" fill="#fff" />
+                  <rect x={wx + 18} y={36} width="1" height="1" fill="#fff" />
+                  <rect x={wx + 36} y={30} width="1" height="1" fill="#fff" />
+                </>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Wall torches every ~5 tiles */}
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Torch key={i} x={20 + i * 160} y={42} />
         ))}
 
-        {/* Wall torches — left and right of the back wall for warmth. */}
-        <Torch x={20} y={42} />
-        <Torch x={356} y={42} />
+        {/* Wall trim */}
+        <rect x="0" y={HORIZON - 4} width={WORLD_W} height="4" fill={wallDark} />
 
-        {/* Wall trim (a wood band at the bottom of the back wall). */}
-        <rect x="0" y={HORIZON - 4} width={STAGE_W} height="4" fill={wallDark} />
-
-        {/* ── Floor ──────────────────────────────────────────────── */}
-        <rect x="0" y={HORIZON} width={STAGE_W} height={FLOOR_H} fill="url(#tavern-floor-grad)" />
-        {/* Plank lines */}
+        {/* Floor */}
+        <rect x="0" y={HORIZON} width={WORLD_W} height={FLOOR_H} fill="url(#tavern-floor-grad)" />
         {Array.from({ length: ROWS }).map((_, r) => (
           <line key={r}
                 x1={0} y1={HORIZON + r * TILE}
-                x2={STAGE_W} y2={HORIZON + r * TILE}
+                x2={WORLD_W} y2={HORIZON + r * TILE}
                 stroke={floorDark} strokeWidth="1" opacity="0.6" />
         ))}
-        {/* Warm overhead light wash */}
-        <rect x="0" y={HORIZON} width={STAGE_W} height={FLOOR_H} fill="url(#tavern-warm-light)" />
+        {/* Vertical plank seams every 3 tiles for texture */}
+        {Array.from({ length: Math.ceil(WORLD_COLS / 3) }).map((_, i) => (
+          <line key={`v${i}`}
+                x1={i * TILE * 3} y1={HORIZON}
+                x2={i * TILE * 3} y2={HORIZON + FLOOR_H}
+                stroke={floorDark} strokeWidth="1" opacity="0.3" />
+        ))}
 
-        {/* ── Edit-mode tile grid overlay ─────────────────────────── */}
-        {editing && Array.from({ length: COLS * ROWS }).map((_, idx) => {
-          const x = idx % COLS, y = Math.floor(idx / COLS);
+        {/* Doorway on the left for visitor entry */}
+        <g>
+          <rect x="0" y={HORIZON - 32} width={TILE} height={32 + TILE * 2} fill="#1c1109" />
+          <rect x="2" y={HORIZON - 26} width={TILE - 4} height={26 + TILE * 2} fill="#0a0606" />
+          <rect x={TILE - 4} y={HORIZON - 32} width="4" height={TILE + 32} fill={wallDark} />
+        </g>
+
+        {/* Warm wash */}
+        <rect x="0" y={HORIZON} width={WORLD_W} height={FLOOR_H} fill="url(#tavern-warm-light)" />
+
+        {/* Edit-mode grid overlay (covers world width so it's visible on pan) */}
+        {editing && Array.from({ length: WORLD_COLS * ROWS }).map((_, idx) => {
+          const x = idx % WORLD_COLS, y = Math.floor(idx / WORLD_COLS);
           const isOcc = occupied.has(`${x},${y}`);
-          const isHl  = highlightSet.has(`${x},${y}`);
+          const isGhost = ghostSet.has(`${x},${y}`);
           return (
             <rect key={idx}
                   x={x * TILE} y={HORIZON + y * TILE}
                   width={TILE} height={TILE}
-                  fill={isHl ? 'rgba(253,224,71,0.25)' : 'transparent'}
-                  stroke={isHl ? '#fde047' : isOcc ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.12)'}
+                  fill={isGhost ? (ghostBlocked ? 'rgba(239,68,68,0.25)' : 'rgba(34,197,94,0.25)') : 'transparent'}
+                  stroke={isGhost ? (ghostBlocked ? '#ef4444' : '#22c55e') : isOcc ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.08)'}
                   strokeWidth="1"
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => onTileClick && onTileClick(x, y)} />
+                  pointerEvents="none" />
           );
         })}
 
-        {/* ── Furniture placements ────────────────────────────────── */}
-        {placements.map(p => (
-          <FurnitureSprite key={p.id} placement={p}
-            tile={TILE} horizon={HORIZON}
+        {/* Placed furniture, sorted by tile_y so things further back render
+            behind closer ones. */}
+        {[...placements].sort((a, b) => a.tile_y - b.tile_y).map(p => (
+          <Placement key={p.id} placement={p}
             onClick={onPlacementClick ? () => onPlacementClick(p) : null} />
         ))}
 
-        {/* ── Owner avatar — stands at the right side of the bar ──── */}
-        {owner && (
-          <foreignObject x={STAGE_W - 110} y={HORIZON + FLOOR_H - 110} width="100" height="110">
-            <div xmlns="http://www.w3.org/1999/xhtml" style={{ display: 'flex', alignItems: 'flex-end' }}>
+        {/* Ghost preview that follows the mouse during placement. */}
+        {ghost && (
+          <g transform={`translate(${ghost.tile_x * TILE} ${HORIZON + ghost.tile_y * TILE})`}
+             opacity="0.55" pointerEvents="none">
+            <FurnitureSprite
+              id={ghost.furniture.id}
+              size={ghost.furniture.size}
+              rarity={ghost.furniture.rarity}
+              rotation={ghost.rotation || 0}
+              mountedItem={ghost.mounted_item}
+              width={(ghost.furniture.size?.w || 1) * TILE}
+              height={(ghost.furniture.size?.h || 1) * TILE}
+            />
+          </g>
+        )}
+
+        {/* ── Visitors / avatars ──────────────────────────────────────
+            Sort by world y so people further back render behind. */}
+        {[...visitors].sort((a, b) => a.y - b.y).map(v => (
+          <VisitorAvatar
+            key={v.userId}
+            v={v}
+            isLocal={v.userId === localUserId}
+            speech={speech && speech.userId === v.userId ? speech : null}
+          />
+        ))}
+
+        {/* ── Owner avatar at the bar (only when owner isn't a visitor) ── */}
+        {owner && !visitors.some(v => v.userId === owner.userId) && (
+          <foreignObject x={WORLD_W - 130} y={HORIZON + FLOOR_H - 110} width="110" height="120">
+            <div xmlns="http://www.w3.org/1999/xhtml" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{
+                fontSize: 10, fontWeight: 600, color: '#fde047',
+                background: 'rgba(0,0,0,0.6)', padding: '1px 6px',
+                borderRadius: 8, marginBottom: 2,
+              }}>👑 {owner.username}</div>
               <PixelCharacter
                 appearance={owner.appearance || {}}
                 equipped={{ ...(owner.equipped || {}), companion: null }}
@@ -191,21 +287,25 @@ export default function TavernScene({
           </foreignObject>
         )}
 
-        {/* ── Pet — wanders across the floor when present ─────────── */}
+        {/* Pet — wanders if no one is moving it via follow */}
         {owner?.equipped?.companion && (
-          <foreignObject x={20} y={HORIZON + FLOOR_H - 70}
-            width="80" height="70"
-            className={petWander ? 'tavern-pet-wander' : ''}>
+          <foreignObject x={WORLD_W - 200} y={HORIZON + FLOOR_H - 70}
+            width="80" height="70" pointerEvents="none">
             <div xmlns="http://www.w3.org/1999/xhtml">
               <PetSprite pet={owner.equipped.companion} playerSize={140} />
             </div>
           </foreignObject>
         )}
 
-        {/* Soft outer vignette so the room feels warmer at the centre. */}
-        <rect x="0" y="0" width={STAGE_W} height={totalH}
-              fill="url(#tavern-warm-light)" opacity="0.6" pointerEvents="none" />
+        <rect x="0" y="0" width={WORLD_W} height={TOTAL_H}
+              fill="url(#tavern-warm-light)" opacity="0.4" pointerEvents="none" />
       </svg>
+
+      {/* Camera-edge fade so the panning feels less abrupt */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: 'linear-gradient(90deg, rgba(10,10,20,0.4), transparent 8%, transparent 92%, rgba(10,10,20,0.4))',
+        borderRadius: 12,
+      }} />
     </div>
   );
 }
@@ -214,73 +314,93 @@ function Torch({ x, y }) {
   return (
     <g className="dungeon-torch">
       <rect x={x} y={y + 8} width="4" height="16" fill="#5c2a0a" />
-      <ellipse cx={x + 2} cy={y + 4} rx="4" ry="6" fill="#fb923c" opacity="0.95" />
+      <ellipse cx={x + 2} cy={y + 4} rx="4" ry="6" fill="#fb923c" opacity="0.95">
+        <animate attributeName="ry" values="6;5;6" dur="1.2s" repeatCount="indefinite" />
+      </ellipse>
       <ellipse cx={x + 2} cy={y + 2} rx="2.5" ry="4" fill="#fef08a" />
     </g>
   );
 }
 
-// ── Furniture sprite ────────────────────────────────────────────────
-// For MVP we render each furniture as a pixel-art tile with the catalog
-// emoji on top, plus a rarity-coloured frame and (for mounts) the mounted
-// item emoji overlaid. Animated pieces get a CSS class for shimmer.
-function FurnitureSprite({ placement, tile, horizon, onClick }) {
+function Placement({ placement, onClick }) {
   const f = placement.furniture;
-  const w = (f.size?.w || 1) * tile;
-  const h = (f.size?.h || 1) * tile;
-  const px = placement.tile_x * tile;
-  const py = horizon + placement.tile_y * tile;
-  const rarityColor = RARITY_COLOR[f.rarity] || '#94a3b8';
+  const w = (f.size?.w || 1) * TILE;
+  const h = (f.size?.h || 1) * TILE;
+  const px = placement.tile_x * TILE;
+  const py = HORIZON + placement.tile_y * TILE;
 
   return (
     <g
       className={`tavern-furn rarity-${f.rarity}${f.animated ? ' tavern-anim' : ''}`}
       transform={`translate(${px} ${py})`}
       style={{ cursor: onClick ? 'pointer' : 'default' }}
-      onClick={onClick}
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
     >
       <title>{f.name}{placement.mounted_item ? ` · holds ${placement.mounted_item.name}` : ''}</title>
-      {/* Tile platform */}
-      <rect x={2} y={h - 8} width={w - 4} height={6} fill="rgba(0,0,0,0.4)" />
-      {/* Rarity-coloured base glow for legendary+ */}
-      {(f.rarity === 'legendary' || f.rarity === 'mythic') && (
-        <ellipse cx={w / 2} cy={h - 4} rx={w / 2 - 4} ry={4} fill={rarityColor} opacity="0.45" />
-      )}
-      {/* Emoji block — sized to the piece's footprint. We render via
-          foreignObject so emoji actually shows (SVG <text> emoji support
-          is patchy across browsers). */}
-      <foreignObject x="0" y="0" width={w} height={h - 6}>
-        <div xmlns="http://www.w3.org/1999/xhtml" style={{
-          width: '100%', height: '100%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: Math.min(w, h) * 0.7,
-          lineHeight: 1,
-          filter: `drop-shadow(0 1px 0 rgba(0,0,0,0.5))`,
-        }}>
-          {f.emoji}
-        </div>
-      </foreignObject>
-      {/* Mounted item overlay */}
-      {placement.mounted_item && (
-        <foreignObject x={w * 0.35} y={2} width={w * 0.6} height={h * 0.5}>
-          <div xmlns="http://www.w3.org/1999/xhtml" style={{
-            width: '100%', height: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: Math.min(w, h) * 0.45,
-            filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.6))',
-          }}>
-            {placement.mounted_item.emoji || '✦'}
-          </div>
-        </foreignObject>
-      )}
+      <FurnitureSprite
+        id={f.id}
+        size={f.size}
+        rarity={f.rarity}
+        rotation={placement.rotation || 0}
+        mountedItem={placement.mounted_item}
+        width={w}
+        height={h}
+      />
     </g>
   );
 }
 
-const RARITY_COLOR = {
-  common: '#94a3b8', rare: '#60a5fa', epic: '#a78bfa',
-  legendary: '#fde047', mythic: '#f0abfc',
-};
+function VisitorAvatar({ v, isLocal, speech }) {
+  // Visitor world coords are in the same pixel space as the floor. Anchor
+  // the avatar so feet sit at (x, y); name floats above the head.
+  const AV_SIZE = 88;
+  return (
+    <foreignObject
+      x={v.x - AV_SIZE / 2}
+      y={v.y - AV_SIZE + 6}
+      width={AV_SIZE} height={AV_SIZE + 28}
+      style={{ overflow: 'visible', pointerEvents: 'none' }}
+    >
+      <div xmlns="http://www.w3.org/1999/xhtml" style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        transform: v.facing === -1 ? 'scaleX(-1)' : 'none',
+      }}>
+        {/* Name floats above the head. Unflip when avatar is flipped. */}
+        <div style={{
+          transform: v.facing === -1 ? 'scaleX(-1)' : 'none',
+          fontSize: 10, fontWeight: 600,
+          color: isLocal ? '#6ee7b7' : '#fde047',
+          background: 'rgba(0,0,0,0.65)', padding: '1px 6px',
+          borderRadius: 8, marginBottom: 2, whiteSpace: 'nowrap',
+        }}>{v.username}</div>
+        {speech && (
+          <div style={{
+            transform: v.facing === -1 ? 'scaleX(-1)' : 'none',
+            fontSize: 11, color: '#fff',
+            background: 'rgba(0,0,0,0.85)',
+            border: '1px solid var(--gold)',
+            padding: '3px 8px', borderRadius: 8,
+            marginBottom: 4, maxWidth: 180,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{speech.text}</div>
+        )}
+        <PixelCharacter
+          appearance={v.appearance || {}}
+          equipped={{ ...(v.equipped || {}), companion: null }}
+          size={AV_SIZE}
+        />
+        {isLocal && (
+          <div style={{
+            transform: v.facing === -1 ? 'scaleX(-1)' : 'none',
+            width: 16, height: 4, marginTop: -2,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(110,231,183,0.6), transparent 70%)',
+          }} />
+        )}
+      </div>
+    </foreignObject>
+  );
+}
 
 function darken(hex, amount = 20) {
   if (!hex || hex[0] !== '#') return hex;

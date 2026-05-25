@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { initDB, pool } = require('./db');
 const { attachToServer } = require('./realtime/partyHub');
+const tavernHub = require('./realtime/tavernHub');
 
 const app = express();
 app.use(cors());
@@ -32,6 +33,7 @@ const server = http.createServer(app);
 // Attach the multiplayer-party WebSocket server to the same HTTP server so
 // it shares the Render port. Clients connect to wss://<host>/ws/party.
 attachToServer(server, { pool });
+tavernHub.attachToServer(server);
 
 initDB().then(() => {
   server.listen(PORT, () => console.log(`Tickd backend on :${PORT}`));

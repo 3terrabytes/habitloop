@@ -286,8 +286,11 @@ const initDB = async () => {
       privacy        VARCHAR(10) DEFAULT 'public',
       wall_color     VARCHAR(7)  DEFAULT '#4a3a2a',
       floor_color    VARCHAR(7)  DEFAULT '#7a5a3a',
+      greeting       VARCHAR(140) DEFAULT 'Welcome to my tavern!',
       updated_at     TIMESTAMP   DEFAULT NOW()
     );
+    -- Backfill greeting column for taverns created before this migration.
+    ALTER TABLE user_tavern ADD COLUMN IF NOT EXISTS greeting VARCHAR(140) DEFAULT 'Welcome to my tavern!';
 
     CREATE TABLE IF NOT EXISTS user_tavern_furniture (
       user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,

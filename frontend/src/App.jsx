@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, NavLink, Link } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { applyTheme } from './utils/themes';
 import AuthPage from './pages/AuthPage';
@@ -18,6 +18,7 @@ import LeaderboardPage from './pages/LeaderboardPage';
 import PartyPage from './pages/PartyPage';
 import ShopPage from './pages/ShopPage';
 import TavernPage from './pages/TavernPage';
+import BrowseTavernsPage from './pages/BrowseTavernsPage';
 import UpdateModal from './components/UpdateModal';
 import FeaturesDebreifModal from './components/FeaturesDebreifModal';
 import SuspensionWarning from './components/SuspensionWarning';
@@ -66,9 +67,8 @@ function Layout({ children }) {
             <NavLink to="/shop" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
               Shop
             </NavLink>
-            <NavLink to="/tavern" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
-              Tavern
-            </NavLink>
+            <TavernNav />
+
             <NavLink to="/guild" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
               Friends
             </NavLink>
@@ -97,6 +97,55 @@ function Layout({ children }) {
       <SuspensionWarning />
       <BanScreen />
     </div>
+  );
+}
+
+// Tavern nav link with a small dropdown so you can jump straight to
+// browse / your own. Behaves like a NavLink when not hovering.
+function TavernNav() {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef(null);
+  const openMenu = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const queueClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), 220);
+  };
+  return (
+    <div
+      style={{ position: 'relative' }}
+      onMouseEnter={openMenu} onMouseLeave={queueClose}
+    >
+      <NavLink to="/tavern" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
+        🍺 Tavern ▾
+      </NavLink>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4,
+          minWidth: 180, background: 'var(--bg2)', border: '1px solid var(--border)',
+          borderRadius: 8, padding: 6, zIndex: 100,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        }}>
+          <DropdownLink to="/tavern" onClick={() => setOpen(false)}>🏠 My Tavern</DropdownLink>
+          <DropdownLink to="/tavern/browse" onClick={() => setOpen(false)}>🗺 Browse Taverns</DropdownLink>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DropdownLink({ to, children, onClick }) {
+  return (
+    <Link to={to} onClick={onClick} style={{
+      display: 'block', padding: '8px 12px', fontSize: 13,
+      color: 'var(--text)', textDecoration: 'none', borderRadius: 6,
+    }}
+    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+      {children}
+    </Link>
   );
 }
 
@@ -145,6 +194,7 @@ export default function App() {
           <Route path="/party" element={<Protected><Layout><PartyPage /></Layout></Protected>} />
           <Route path="/shop" element={<Protected><Layout><ShopPage /></Layout></Protected>} />
           <Route path="/tavern" element={<Protected><Layout><TavernPage /></Layout></Protected>} />
+          <Route path="/tavern/browse" element={<Protected><Layout><BrowseTavernsPage /></Layout></Protected>} />
           <Route path="/tavern/:username" element={<Protected><Layout><TavernPage /></Layout></Protected>} />
           <Route path="/leaderboard" element={<Protected><Layout><LeaderboardPage /></Layout></Protected>} />
           <Route path="/users/:username" element={<ProfilePage />} />

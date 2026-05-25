@@ -23,7 +23,9 @@ const { itemById } = require('../data/items');
 const router = express.Router();
 router.use(auth);
 
-const TILE_COLS = 12;
+// World is 24 tiles wide so the camera has room to pan. The original 12-tile
+// grid is now just the leftmost half — existing placements stay valid.
+const TILE_COLS = 24;
 const TILE_ROWS = 8;
 
 // Bootstrap a tavern row + starter furniture the first time a user opens
@@ -51,10 +53,13 @@ async function ensureTavern(userId) {
 //   - wave count (sum across all visitors)
 async function loadTavern(userId) {
   const { rows: settingsRows } = await pool.query(
-    `SELECT privacy, wall_color, floor_color FROM user_tavern WHERE user_id=$1`,
+    `SELECT privacy, wall_color, floor_color, greeting FROM user_tavern WHERE user_id=$1`,
     [userId]
   );
-  const settings = settingsRows[0] || { privacy: 'public', wall_color: '#4a3a2a', floor_color: '#7a5a3a' };
+  const settings = settingsRows[0] || {
+    privacy: 'public', wall_color: '#4a3a2a', floor_color: '#7a5a3a',
+    greeting: 'Welcome to my tavern!',
+  };
 
   const { rows: owned } = await pool.query(
     `SELECT furniture_id FROM user_tavern_furniture WHERE user_id=$1`,
@@ -225,6 +230,8 @@ router.patch('/settings', async (req, res) => {
     if (privacy && ['public', 'friends', 'private'].includes(privacy)) allowed.privacy = privacy;
     if (wall_color && /^#[0-9a-f]{6}$/i.test(wall_color))               allowed.wall_color = wall_color;
     if (floor_color && /^#[0-9a-f]{6}$/i.test(floor_color))             allowed.floor_color = floor_color;
+    const greeting = typeof req.body?.greeting === 'string' ? req.body.greeting.slice(0, 140) : undefined;
+    if (greeting !== undefined) allowed.greeting = greeting;
     if (!Object.keys(allowed).length) return res.json(await loadTavern(req.userId));
 
     await ensureTavern(req.userId);
@@ -236,6 +243,40 @@ router.patch('/settings', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('tavern/settings error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Browse public taverns ──────────────────────────────────────────
+// List a page of taverns the user can visit. Defaults to public taverns
+// sorted by most recently updated, plus the user's friends' taverns
+// (whose privacy may be 'friends').
+router.get('/browse', async (req, res) => {
+  try {
+    const q = (req.query?.q || '').toString().trim().slice(0, 40);
+    const { rows: friends } = await pool.query(
+      `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS friend_id
+         FROM friendships
+        WHERE status='accepted' AND $1 IN (requester_id, addressee_id)`,
+      [req.userId]
+    );
+    const friendIds = friends.map(r => r.friend_id);
+
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.level, t.privacy, t.greeting, t.updated_at,
+              (SELECT COUNT(*)::int FROM user_tavern_placements WHERE user_id = u.id) AS piece_count,
+              (SELECT COUNT(*)::int FROM user_tavern_waves      WHERE owner_id = u.id) AS wave_count
+         FROM user_tavern t JOIN users u ON u.id = t.user_id
+        WHERE (t.privacy = 'public' OR (t.privacy = 'friends' AND u.id = ANY($2::int[])))
+          AND u.id <> $1
+          AND ($3 = '' OR LOWER(u.username) LIKE LOWER('%' || $3 || '%'))
+        ORDER BY t.updated_at DESC NULLS LAST, u.level DESC
+        LIMIT 40`,
+      [req.userId, friendIds, q]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('tavern/browse error', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

@@ -166,6 +166,27 @@ export const api = {
     myLoadout: (partyId) => req('GET',  `/party/${partyId}/my-loadout`),
     state:     (partyId) => req('GET',  `/party/${partyId}`),
   },
+  tavern: {
+    me:        () => req('GET', '/tavern/me'),
+    visit:     (username) => req('GET', `/tavern/${encodeURIComponent(username)}`),
+    browse:    (q = '') => req('GET', `/tavern/browse${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+    place:     (body) => req('POST', '/tavern/place', body),
+    unplace:   (tile_x, tile_y) => req('DELETE', '/tavern/place', { tile_x, tile_y }),
+    settings:  (body) => req('PATCH', '/tavern/settings', body),
+    wave:      (username) => req('POST', `/tavern/${encodeURIComponent(username)}/wave`),
+    guestbook: (username, message) => req('POST', `/tavern/${encodeURIComponent(username)}/guestbook`, { message }),
+  },
+};
+
+// WS URL builders for the various real-time hubs.
+export const wsTavernUrl = (token, ownerUsername) => {
+  const baseRest = BASE || window.location.origin;
+  const url = new URL(baseRest);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = '/ws/tavern';
+  url.searchParams.set('token', token);
+  url.searchParams.set('owner', ownerUsername);
+  return url.toString();
 };
 
 // Build the WebSocket URL for live party updates. Adapts the REST BASE
