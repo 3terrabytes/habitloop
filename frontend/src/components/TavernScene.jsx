@@ -270,7 +270,7 @@ export default function TavernScene({
         ))}
 
         {/* ── Owner avatar at the bar (only when owner isn't a visitor) ── */}
-        {owner && !visitors.some(v => v.userId === owner.userId) && (
+        {owner && !visitors.some(v => v.userId === (owner.userId ?? owner.id)) && (
           <foreignObject x={WORLD_W - 130} y={HORIZON + FLOOR_H - 110} width="110" height="120">
             <div xmlns="http://www.w3.org/1999/xhtml" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{
@@ -361,7 +361,9 @@ function VisitorAvatar({ v, isLocal, speech }) {
       width={AV_SIZE} height={AV_SIZE + 28}
       style={{ overflow: 'visible', pointerEvents: 'none' }}
     >
-      <div xmlns="http://www.w3.org/1999/xhtml" style={{
+      <div xmlns="http://www.w3.org/1999/xhtml"
+        className={`${v.moving ? 'tavern-walking' : ''} ${v.sitting ? 'tavern-sitting' : ''}`.trim()}
+        style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         transform: v.facing === -1 ? 'scaleX(-1)' : 'none',
       }}>

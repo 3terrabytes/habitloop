@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { levelTitle, xpForLevel } from '../utils/xp';
 import PixelCharacter from '../components/PixelCharacter';
 import BannerName from '../components/BannerName';
+import EmoteOverlay from '../components/EmoteOverlay';
+import useEmoteBus from '../hooks/useEmoteBus';
 
 const RARITY_COLORS = { common: '#9ca3af', rare: '#3b82f6', epic: '#8b5cf6', legendary: '#f59e0b' };
 
@@ -37,19 +39,24 @@ export default function Dashboard() {
   const xpProgress   = Math.min(((currentXP - prevLevelXP) / (nextLevelXP - prevLevelXP)) * 100, 100);
   const rebirthMult  = 1 + 0.5 * (user?.rebirth_count || 0);
 
+  // Emote bus — pressing E or the emote button shows the equipped emote
+  // above the big home avatar.
+  const { activeEmote } = useEmoteBus({ user });
+
   return (
     <div style={styles.wrap}>
       {/* ── AVATAR SHOWCASE ─────────────────────────────────────── */}
       {/* Whole frame is a link to /avatar so clicking the character takes
           you straight to the customizer — most natural affordance. */}
       <div className="card" style={styles.avatarCard}>
-        <Link to="/avatar" style={styles.avatarFrame} className="avatar-frame-link" title="Edit appearance and gear">
+        <Link to="/avatar" style={{ ...styles.avatarFrame, position: 'relative' }} className="avatar-frame-link" title="Edit appearance and gear">
           <PixelCharacter
             equipped={equipped}
             appearance={user || {}}
             size={260}
           />
           <span style={styles.editPill} className="avatar-edit-pill">✏️ Edit</span>
+          {activeEmote && <EmoteOverlay emote={activeEmote} offsetY={-40} />}
         </Link>
 
         <div style={styles.identity}>

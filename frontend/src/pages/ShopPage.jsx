@@ -21,10 +21,12 @@ const RARITY_ORDER = ['mythic', 'legendary', 'epic', 'rare', 'common'];
 
 export default function ShopPage() {
   const { user, refreshUser } = useAuth();
-  const [tab, setTab] = useState('items'); // 'items' | 'decor'
+  const [tab, setTab] = useState('items'); // 'items' | 'decor' | 'emotes'
   const [items, setItems] = useState({ gold: 0, items: [], ownedIds: [], legendsUnlocked: false });
   const [decor, setDecor] = useState({ gold: 0, items: [], ownedIds: [] });
+  const [emotes, setEmotes] = useState({ gold: 0, items: [], ownedIds: [], equipped: 'wave' });
   const [buying, setBuying] = useState(null);
+  const [equipping, setEquipping] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, kind = 'info') => {
@@ -36,11 +38,12 @@ export default function ShopPage() {
   // together to keep gold balance consistent across tabs.
   const load = async () => {
     try {
-      const [s, f] = await Promise.all([
+      const [s, f, em] = await Promise.all([
         api.avatar.shop().catch(() => ({ items: [], ownedIds: [] })),
         api.avatar.furniture().catch(() => ({ items: [], ownedIds: [] })),
+        api.avatar.emotes().catch(() => ({ items: [], ownedIds: [], equipped: 'wave' })),
       ]);
-      setItems(s); setDecor(f);
+      setItems(s); setDecor(f); setEmotes(em);
     } catch (e) { /* ignore */ }
   };
   useEffect(() => { load(); }, []);
@@ -66,6 +69,29 @@ export default function ShopPage() {
     finally { setBuying(null); }
   };
 
+  const buyEmote = async (e) => {
+    if (buying) return;
+    setBuying(e.id);
+    try {
+      await api.avatar.buyEmote(e.id);
+      showToast(`Bought ${e.name}!`);
+      await load(); await refreshUser?.();
+    } catch (err) { showToast(err.message, 'error'); }
+    finally { setBuying(null); }
+  };
+
+  const equipEmote = async (e) => {
+    if (equipping) return;
+    setEquipping(e.id);
+    try {
+      await api.avatar.equipEmote(e.id);
+      showToast(`Equipped ${e.name}`);
+      setEmotes(prev => ({ ...prev, equipped: e.id }));
+      await refreshUser?.();
+    } catch (err) { showToast(err.message, 'error'); }
+    finally { setEquipping(null); }
+  };
+
   const gold = user?.gold ?? items.gold ?? decor.gold ?? 0;
 
   return (
@@ -86,8 +112,9 @@ export default function ShopPage() {
       )}
 
       <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--bg2)', borderRadius: 10 }}>
-        <TabButton active={tab === 'items'} onClick={() => setTab('items')}>⚔️ Items</TabButton>
-        <TabButton active={tab === 'decor'} onClick={() => setTab('decor')}>🏛️ Decorations</TabButton>
+        <TabButton active={tab === 'items'}  onClick={() => setTab('items')}>⚔️ Items</TabButton>
+        <TabButton active={tab === 'decor'}  onClick={() => setTab('decor')}>🏛️ Decorations</TabButton>
+        <TabButton active={tab === 'emotes'} onClick={() => setTab('emotes')}>🎭 Emotes</TabButton>
       </div>
 
       {tab === 'items' && (
@@ -111,6 +138,85 @@ export default function ShopPage() {
           showDropOnly
         />
       )}
+      {tab === 'emotes' && (
+        <EmoteGrid
+          items={emotes.items}
+          ownedIds={emotes.ownedIds}
+          equipped={emotes.equipped}
+          buying={buying}
+          equipping={equipping}
+          onBuy={buyEmote}
+          onEquip={equipEmote}
+          gold={gold}
+        />
+      )}
+    </div>
+  );
+}
+
+// Specialised grid for emotes — same rarity grouping as ShopGrid but
+// adds an Equip button (and current-equipped pill) since emotes have an
+// equip slot instead of being passively-equipped like gear.
+function EmoteGrid({ items, ownedIds, equipped, buying, equipping, onBuy, onEquip, gold }) {
+  const owned = new Set(ownedIds || []);
+  const grouped = {};
+  for (const e of items) {
+    const r = e.rarity || 'common';
+    (grouped[r] = grouped[r] || []).push(e);
+  }
+  if (!items.length) {
+    return <div className="card" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>Loading emotes...</div>;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        Press <b>E</b> anywhere (or tap the 🎭 button up top) to play your equipped emote above your avatar.
+      </div>
+      {RARITY_ORDER.filter(r => grouped[r]?.length).map(r => {
+        const rarity = RARITY[r];
+        return (
+          <section key={r}>
+            <h3 style={{ margin: '4px 2px 8px', color: rarity.color, fontSize: 13, fontFamily: 'Cinzel, serif', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              {rarity.label}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+              {grouped[r].map(e => {
+                const isOwned = owned.has(e.id);
+                const isEquipped = equipped === e.id;
+                const canAfford = gold >= (e.cost || 0);
+                return (
+                  <div key={e.id} className="card" style={{
+                    padding: 10,
+                    border: `1px solid ${isEquipped ? rarity.color : (isOwned ? rarity.color : rarity.border)}`,
+                    boxShadow: isEquipped ? `0 0 16px ${rarity.color}55` : (isOwned ? `0 0 8px ${rarity.color}22` : 'none'),
+                    background: 'var(--bg2)',
+                    display: 'flex', flexDirection: 'column', gap: 4,
+                  }}>
+                    <div style={{ fontSize: 36, textAlign: 'center', height: 50 }}>{e.glyph}</div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
+                    <div style={{ flex: 1 }} />
+                    {isEquipped ? (
+                      <div style={{ fontSize: 12, color: rarity.color, fontWeight: 700, textAlign: 'center', padding: '6px 0' }}>EQUIPPED</div>
+                    ) : isOwned ? (
+                      <button className="btn btn-primary" style={{ width: '100%', fontSize: 12, padding: '6px' }}
+                        disabled={equipping === e.id}
+                        onClick={() => onEquip(e)}>
+                        {equipping === e.id ? '...' : 'Equip'}
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary" style={{ width: '100%', fontSize: 12, padding: '6px', opacity: canAfford ? 1 : 0.55 }}
+                        disabled={buying === e.id || !canAfford}
+                        onClick={() => onBuy(e)}>
+                        {buying === e.id ? '...' : `💰 ${e.cost?.toLocaleString() || '?'}`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

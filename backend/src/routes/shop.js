@@ -3,6 +3,7 @@ const { pool } = require('../db');
 const auth = require('../middleware/auth');
 const { ITEMS, PACKS, itemById, packById, packFullCost, packDiscount } = require('../data/items');
 const { FURNITURE, furnitureById } = require('../data/furniture');
+const { EMOTES, STARTER_EMOTE_IDS, emoteById } = require('../data/emotes');
 const router = express.Router();
 
 router.use(auth);
@@ -144,6 +145,68 @@ router.post('/shop/buy-pack/:packId', async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+// ── Emotes ────────────────────────────────────────────────────────────
+// Catalog + ownership + equipped slot. Starter emotes are auto-granted
+// the first time a user fetches the list so everyone has at least Wave/Bow.
+router.get('/emotes', async (req, res) => {
+  // Auto-grant starter emotes (idempotent).
+  for (const sid of STARTER_EMOTE_IDS) {
+    await pool.query(
+      `INSERT INTO user_emotes (user_id, emote_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [req.userId, sid]
+    );
+  }
+  const [{ rows: owned }, { rows: userRows }] = await Promise.all([
+    pool.query(`SELECT emote_id FROM user_emotes WHERE user_id = $1`, [req.userId]),
+    pool.query(`SELECT gold, equipped_emote FROM users WHERE id = $1`, [req.userId]),
+  ]);
+  res.json({
+    gold: userRows[0]?.gold || 0,
+    items: EMOTES,
+    ownedIds: owned.map(r => r.emote_id),
+    equipped: userRows[0]?.equipped_emote || 'wave',
+  });
+});
+
+router.post('/emotes/buy/:emoteId', async (req, res) => {
+  const e = emoteById(req.params.emoteId);
+  if (!e) return res.status(404).json({ error: 'Emote not found' });
+  if (e.cost === 0) return res.status(400).json({ error: 'This emote is already free' });
+  const { rows } = await pool.query('SELECT gold, username FROM users WHERE id = $1', [req.userId]);
+  const user = rows[0];
+  const isTheDevs = user?.username?.toLowerCase() === 'thedevs';
+  if (!isTheDevs && (user?.gold || 0) < e.cost) {
+    return res.status(400).json({ error: 'Not enough gold' });
+  }
+  try {
+    await pool.query(
+      'INSERT INTO user_emotes (user_id, emote_id) VALUES ($1, $2)',
+      [req.userId, e.id]
+    );
+    if (!isTheDevs) {
+      await pool.query('UPDATE users SET gold = gold - $1 WHERE id = $2', [e.cost, req.userId]);
+    }
+    const { rows: u } = await pool.query('SELECT gold FROM users WHERE id = $1', [req.userId]);
+    res.json({ success: true, gold: u[0].gold });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Already owned' });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/emotes/equip/:emoteId', async (req, res) => {
+  const e = emoteById(req.params.emoteId);
+  if (!e) return res.status(404).json({ error: 'Emote not found' });
+  const { rows } = await pool.query(
+    'SELECT 1 FROM user_emotes WHERE user_id = $1 AND emote_id = $2',
+    [req.userId, e.id]
+  );
+  if (!rows.length) return res.status(403).json({ error: 'Not owned' });
+  await pool.query('UPDATE users SET equipped_emote = $1 WHERE id = $2', [e.id, req.userId]);
+  res.json({ success: true, equipped: e.id });
 });
 
 // ── Decorations (tavern furniture) ────────────────────────────────────

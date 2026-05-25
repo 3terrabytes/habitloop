@@ -85,6 +85,7 @@ function Layout({ children }) {
             )}
           </nav>
 
+          <EmoteButton />
           <button className="btn btn-ghost" style={{ padding: '8px 14px', fontSize: 13 }} onClick={logout}>
             Sign Out
           </button>
@@ -97,6 +98,26 @@ function Layout({ children }) {
       <SuspensionWarning />
       <BanScreen />
     </div>
+  );
+}
+
+// Top-bar emote button. Dispatches the global emote-broadcast event so
+// any page listening (useEmoteBus) plays the local player's equipped
+// emote above their avatar. Same effect as pressing E anywhere.
+function EmoteButton() {
+  const { user } = useAuth();
+  const trigger = () => {
+    window.dispatchEvent(new CustomEvent('tickd:emote-broadcast', {
+      detail: { emoteId: user?.equipped_emote || 'wave' },
+    }));
+  };
+  return (
+    <button
+      className="btn btn-ghost"
+      style={{ padding: '8px 12px', fontSize: 16, lineHeight: 1 }}
+      onClick={trigger}
+      title="Play your equipped emote (press E anywhere)"
+    >🎭</button>
   );
 }
 
@@ -119,7 +140,7 @@ function TavernNav() {
       onMouseEnter={openMenu} onMouseLeave={queueClose}
     >
       <NavLink to="/tavern" style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}>
-        🍺 Tavern ▾
+        Tavern ▾
       </NavLink>
       {open && (
         <div style={{

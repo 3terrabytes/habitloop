@@ -149,11 +149,12 @@ function OwnTavern() {
         x: tavernPlay.pos.x,
         y: tavernPlay.pos.y,
         facing: tavernPlay.facing,
+        moving: tavernPlay.moving,
       });
     }
     for (const p of peers.values()) list.push(p);
     return list;
-  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing, data]);
+  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing, tavernPlay.moving, data]);
 
   if (!data) {
     return <div className="card" style={{ padding: 24, textAlign: 'center' }}>Loading your tavern...</div>;
@@ -389,11 +390,12 @@ function VisitTavern({ username }) {
         x: tavernPlay.pos.x,
         y: tavernPlay.pos.y,
         facing: tavernPlay.facing,
+        moving: tavernPlay.moving,
       });
     }
     for (const p of peers.values()) list.push(p);
     return list;
-  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing]);
+  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing, tavernPlay.moving]);
 
   if (err) {
     return <div className="card" style={{ padding: 24, textAlign: 'center', color: '#fca5a5' }}>{err}</div>;
@@ -454,12 +456,15 @@ function useTavernPlayer({ placements, editing, placingFurniture, onMove, spawn 
   const initial = spawn || { x: WORLD_W - 200, y: HORIZON + FLOOR_H - 36 };
   const [pos, setPos] = useState(initial);
   const [facing, setFacing] = useState(1);
+  const [moving, setMoving] = useState(false);
   const [cameraX, setCameraX] = useState(Math.max(0, initial.x - VIEW_W / 2));
   const heldRef = useRef(new Set());
   const touchRef = useRef({ x: 0, y: 0 }); // -1/0/1 each
   const lastTickRef = useRef(performance.now());
+  const movingClearRef = useRef(0); // timestamp until which `moving` stays true after last input
   const posRef = useRef(initial);
   const facingRef = useRef(1);
+  const movingRef = useRef(false);
   const cameraXRef = useRef(cameraX);
 
   // Build collision grid from placements.
@@ -533,7 +538,12 @@ function useTavernPlayer({ placements, editing, placingFurniture, onMove, spawn 
           setFacing(facingRef.current);
         }
         setPos({ x: newX, y: newY });
-        if (onMove) onMove(newX, newY, facingRef.current);
+        movingClearRef.current = now + 140;
+        if (!movingRef.current) { movingRef.current = true; setMoving(true); }
+        if (onMove) onMove(newX, newY, facingRef.current, true);
+      } else if (movingRef.current && now >= movingClearRef.current) {
+        movingRef.current = false; setMoving(false);
+        if (onMove) onMove(posRef.current.x, posRef.current.y, facingRef.current, false);
       }
 
       // Camera lerps toward player x.
@@ -549,7 +559,7 @@ function useTavernPlayer({ placements, editing, placingFurniture, onMove, spawn 
 
   const touchDir = (dx, dy) => { touchRef.current = { x: dx, y: dy }; };
 
-  return { pos, facing, cameraX, touchDir };
+  return { pos, facing, moving, cameraX, touchDir };
 }
 
 // ── D-pad ─────────────────────────────────────────────────────────

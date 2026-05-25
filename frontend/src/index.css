@@ -156,6 +156,125 @@ input {
 /* Sparkle accent — applied to a small dot in the SVG for rare+ pets. */
 .pet-sparkle     { animation: pet-sparkle 1.8s ease-in-out infinite; }
 
+/* ── Walking animation for the tavern player ─────────────────────────
+   Bouncier than the idle bob — gives a sense of footsteps. Squash on
+   the down-beat, stretch on the up-beat, plus a tiny horizontal sway. */
+@keyframes tavern-walk {
+  0%   { transform: translateY(0)    scaleY(1)    scaleX(1); }
+  20%  { transform: translateY(-3px) scaleY(1.04) scaleX(0.98); }
+  50%  { transform: translateY(0)    scaleY(1)    scaleX(1); }
+  70%  { transform: translateY(-3px) scaleY(1.04) scaleX(0.98); }
+  100% { transform: translateY(0)    scaleY(1)    scaleX(1); }
+}
+.tavern-walking { animation: tavern-walk 0.42s ease-in-out infinite; }
+
+/* Sitting state — short squash + small Y offset so the avatar looks
+   like it's actually using the chair. Static (no animation, just
+   transform). */
+.tavern-sitting { transform: translateY(6px) scaleY(0.82); }
+
+/* ── Emote overlays ──────────────────────────────────────────────────
+   Each emote animation plays once over its lifetime (~1.6s). The
+   parent removes the overlay after the same duration. */
+@keyframes emote-pop {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.6); }
+  20%  { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1.15); }
+  85%  { opacity: 1; transform: translateX(-50%) translateY(-6px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.9); }
+}
+.emote-overlay {
+  animation: emote-pop 1.6s ease-out forwards;
+  will-change: transform, opacity;
+}
+@keyframes emote-wave-tilt {
+  0%, 100% { transform: translateX(-50%) rotate(-12deg) scale(1); }
+  50%      { transform: translateX(-50%) rotate(12deg)  scale(1.1); }
+}
+@keyframes emote-bow-tilt {
+  0%, 100% { transform: translateX(-50%) translateY(0)   scale(1); }
+  50%      { transform: translateX(-50%) translateY(6px) scale(0.9); }
+}
+@keyframes emote-clap-flash {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50%      { transform: translateX(-50%) scale(1.3); filter: brightness(1.4); }
+}
+@keyframes emote-nod-bob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%      { transform: translateX(-50%) translateY(-4px); }
+}
+@keyframes emote-dance-shake {
+  0%, 100% { transform: translateX(-50%) rotate(0); }
+  25%      { transform: translateX(calc(-50% - 4px)) rotate(-8deg); }
+  75%      { transform: translateX(calc(-50% + 4px)) rotate(8deg); }
+}
+@keyframes emote-sleep-fade {
+  0%, 100% { opacity: 0.6; transform: translateX(-50%) translateY(0) rotate(-15deg); }
+  50%      { opacity: 1;   transform: translateX(-50%) translateY(-4px) rotate(0); }
+}
+@keyframes emote-shrug-tilt {
+  0%, 100% { transform: translateX(-50%) rotate(0)   translateY(0); }
+  50%      { transform: translateX(-50%) rotate(10deg) translateY(-3px); }
+}
+@keyframes emote-point-jab {
+  0%, 100% { transform: translateX(-50%) translateX(0); }
+  50%      { transform: translateX(-50%) translateX(8px); }
+}
+@keyframes emote-cheer-burst {
+  0%, 100% { transform: translateX(-50%) scale(1)    rotate(0); filter: brightness(1); }
+  50%      { transform: translateX(-50%) scale(1.4)  rotate(15deg); filter: brightness(1.5); }
+}
+@keyframes emote-flex-pulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  40%      { transform: translateX(-50%) scale(1.25); }
+  60%      { transform: translateX(-50%) scale(0.9); }
+}
+@keyframes emote-salute-tilt {
+  0%, 100% { transform: translateX(-50%) rotate(0); }
+  50%      { transform: translateX(-50%) rotate(20deg); }
+}
+@keyframes emote-laugh-shake {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  20%      { transform: translateX(-50%) translateY(-3px) rotate(-5deg); }
+  60%      { transform: translateX(-50%) translateY(-3px) rotate(5deg); }
+}
+@keyframes emote-meditate-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(167,139,250,0.4));   transform: translateX(-50%) translateY(0); }
+  50%      { filter: drop-shadow(0 0 14px rgba(167,139,250,0.9));  transform: translateX(-50%) translateY(-3px); }
+}
+@keyframes emote-levitate-spin {
+  0%   { transform: translateX(-50%) rotate(0)   translateY(0); }
+  100% { transform: translateX(-50%) rotate(360deg) translateY(-6px); }
+}
+@keyframes emote-godmode-pulse {
+  0%, 100% { filter: drop-shadow(0 0 8px #fde047) brightness(1);   transform: translateX(-50%) scale(1); }
+  50%      { filter: drop-shadow(0 0 22px #fde047) brightness(1.6); transform: translateX(-50%) scale(1.3); }
+}
+@keyframes emote-sparkle-burst {
+  0%, 100% { filter: drop-shadow(0 0 6px #f0abfc); transform: translateX(-50%) rotate(0)   scale(1); }
+  25%      { filter: drop-shadow(0 0 18px #f0abfc); transform: translateX(-50%) rotate(20deg) scale(1.2); }
+  75%      { filter: drop-shadow(0 0 18px #f0abfc); transform: translateX(-50%) rotate(-20deg) scale(1.2); }
+}
+
+/* Per-emote animation classes — each runs in parallel with emote-pop's
+   opacity envelope (we composite by chaining animations). The pop class
+   above provides fade in/out; these add the personality on top. */
+.emote-overlay.emote-wave     { animation: emote-pop 1.6s ease-out forwards, emote-wave-tilt    0.42s ease-in-out 4; }
+.emote-overlay.emote-bow      { animation: emote-pop 1.6s ease-out forwards, emote-bow-tilt     0.7s  ease-in-out 2; }
+.emote-overlay.emote-clap     { animation: emote-pop 1.6s ease-out forwards, emote-clap-flash   0.32s ease-in-out 5; }
+.emote-overlay.emote-nod      { animation: emote-pop 1.6s ease-out forwards, emote-nod-bob      0.4s  ease-in-out 4; }
+.emote-overlay.emote-dance    { animation: emote-pop 1.6s ease-out forwards, emote-dance-shake  0.3s  ease-in-out 6; }
+.emote-overlay.emote-sleep    { animation: emote-pop 1.6s ease-out forwards, emote-sleep-fade   0.8s  ease-in-out 2; }
+.emote-overlay.emote-shrug    { animation: emote-pop 1.6s ease-out forwards, emote-shrug-tilt   0.55s ease-in-out 3; }
+.emote-overlay.emote-point    { animation: emote-pop 1.6s ease-out forwards, emote-point-jab    0.35s ease-in-out 5; }
+.emote-overlay.emote-cheer    { animation: emote-pop 1.6s ease-out forwards, emote-cheer-burst  0.45s ease-in-out 4; }
+.emote-overlay.emote-flex     { animation: emote-pop 1.6s ease-out forwards, emote-flex-pulse   0.5s  ease-in-out 3; }
+.emote-overlay.emote-salute   { animation: emote-pop 1.6s ease-out forwards, emote-salute-tilt  0.6s  ease-in-out 2; }
+.emote-overlay.emote-laugh    { animation: emote-pop 1.6s ease-out forwards, emote-laugh-shake  0.32s ease-in-out 5; }
+.emote-overlay.emote-meditate { animation: emote-pop 1.6s ease-out forwards, emote-meditate-glow 0.8s ease-in-out 2; }
+.emote-overlay.emote-levitate { animation: emote-pop 1.6s ease-out forwards, emote-levitate-spin 1.6s linear 1; }
+.emote-overlay.emote-godmode  { animation: emote-pop 1.6s ease-out forwards, emote-godmode-pulse 0.5s ease-in-out 3; }
+.emote-overlay.emote-sparkle  { animation: emote-pop 1.6s ease-out forwards, emote-sparkle-burst 0.55s ease-in-out 3; }
+
 /* ── Pet idle tricks ─────────────────────────────────────────────────────
    Fired briefly via a class toggle in PixelCharacter's useEffect every
    8-14 seconds. Each runs ONCE then is removed, so the underlying idle

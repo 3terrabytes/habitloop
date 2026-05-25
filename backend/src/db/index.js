@@ -164,6 +164,15 @@ const initDB = async () => {
       PRIMARY KEY (user_id, attack_id)
     );
 
+    -- Emote ownership + equipped slot. Players buy emotes in the shop and
+    -- pick one to bind to the E key + emote button.
+    CREATE TABLE IF NOT EXISTS user_emotes (
+      user_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      emote_id  VARCHAR(40) NOT NULL,
+      PRIMARY KEY (user_id, emote_id)
+    );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS equipped_emote VARCHAR(40) DEFAULT 'wave';
+
     -- Three saveable loadout presets per user. Each row snapshots an equip
     -- set + 4-slot attack bar so the player can swap gear configs in one
     -- click without re-equipping every piece.

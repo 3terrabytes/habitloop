@@ -23,14 +23,22 @@ export default function useTavernPresence(ownerUsername) {
   const pendingTimerRef = useRef(null);
   const lastSendRef = useRef(0);
 
-  const sendMove = useCallback((x, y, facing) => {
+  const sendMove = useCallback((x, y, facing, moving = false, sitting = false) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== ws.OPEN) return;
     // Throttle to 10/sec so we don't spam the socket on every RAF tick.
     const now = performance.now();
     if (now - lastSendRef.current < 100) return;
     lastSendRef.current = now;
-    try { ws.send(JSON.stringify({ type: 'MOVE', x, y, facing })); }
+    try { ws.send(JSON.stringify({ type: 'MOVE', x, y, facing, moving, sitting })); }
+    catch (e) { /* ignore */ }
+  }, []);
+
+  // Send the user's equipped emote over the tavern WS so peers see it.
+  const sendEmote = useCallback((emoteId) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== ws.OPEN) return;
+    try { ws.send(JSON.stringify({ type: 'EMOTE', emote: emoteId })); }
     catch (e) { /* ignore */ }
   }, []);
 
@@ -81,9 +89,21 @@ export default function useTavernPresence(ownerUsername) {
               const cur = prev.get(msg.userId);
               if (!cur) return prev;
               const m = new Map(prev);
-              m.set(msg.userId, { ...cur, x: msg.x, y: msg.y, facing: msg.facing });
+              m.set(msg.userId, {
+                ...cur,
+                x: msg.x, y: msg.y, facing: msg.facing,
+                moving:  !!msg.moving,
+                sitting: !!msg.sitting,
+              });
               return m;
             });
+          } else if (msg.type === 'EMOTE') {
+            // Dispatch as a DOM event so the page can render the overlay
+            // above the matching peer avatar (or own avatar if the
+            // sender id matches).
+            window.dispatchEvent(new CustomEvent('tickd:tavern-emote', {
+              detail: { userId: msg.userId, emoteId: msg.emote },
+            }));
           }
         } catch (e) { /* ignore */ }
       };
@@ -112,5 +132,5 @@ export default function useTavernPresence(ownerUsername) {
     };
   }, [ownerUsername]);
 
-  return { peers, connected, sendMove };
+  return { peers, connected, sendMove, sendEmote };
 }

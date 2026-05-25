@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
-import PixelCharacter from '../components/PixelCharacter';
+import PixelCharacter, { PetSprite } from '../components/PixelCharacter';
 import HitBurst from '../components/HitBurst';
 import ScreenFlash from '../components/ScreenFlash';
 
@@ -1058,15 +1058,14 @@ export default function DungeonPage() {
                       fontSize: 22, animation: 'bob 1s ease-in-out infinite' }}>🧉</div>
                   )}
                 </div>
-                {/* Pet companion fighting alongside the player */}
+                {/* Pet companion fighting alongside the player — pixel sprite only */}
                 {inventory && inventory.equipped && inventory.equipped.companion && (
-                  <div className={petAnim || 'pet-idle'} style={{
-                    fontSize: 56, lineHeight: 1,
+                  <div className={petAnim || ''} style={{
                     filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))',
                     position: 'relative',
                   }}
                   title={inventory.equipped.companion.name}>
-                    {inventory.equipped.companion.emoji}
+                    <PetSprite pet={inventory.equipped.companion} playerSize={130} />
                   </div>
                 )}
               </div>

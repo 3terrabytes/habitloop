@@ -166,7 +166,7 @@ async function handleConnection(ws, userId, ownerUsername) {
 
   const entry = {
     ws, profile,
-    pos: { x: 80, y: 200, facing: 1 },
+    pos: { x: 80, y: 200, facing: 1, moving: false, sitting: false },
   };
   room.set(userId, entry);
 
@@ -188,9 +188,16 @@ async function handleConnection(ws, userId, ownerUsername) {
         entry.pos = {
           x: Math.max(0, Math.min(2000, Number(msg.x) || 0)),
           y: Math.max(0, Math.min(2000, Number(msg.y) || 0)),
-          facing: msg.facing === -1 ? -1 : 1,
+          facing:  msg.facing === -1 ? -1 : 1,
+          moving:  !!msg.moving,
+          sitting: !!msg.sitting,
         };
         broadcast(ownerId, { type: 'POS', userId, ...entry.pos }, userId);
+      } else if (msg.type === 'EMOTE' && typeof msg.emote === 'string') {
+        // Equipped-emote broadcast — rebroadcast to everyone (including
+        // sender, so animations stay in sync) so peers can play the same
+        // emote overlay above the actor.
+        broadcast(ownerId, { type: 'EMOTE', userId, emote: String(msg.emote).slice(0, 40) });
       }
     } catch (e) { /* ignore malformed */ }
   });
