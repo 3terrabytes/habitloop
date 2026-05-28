@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { levelTitle, xpForLevel } from '../utils/xp';
 import PixelCharacter from '../components/PixelCharacter';
 import BannerName from '../components/BannerName';
-import EmoteOverlay from '../components/EmoteOverlay';
 import useEmoteBus from '../hooks/useEmoteBus';
 
 const RARITY_COLORS = { common: '#9ca3af', rare: '#3b82f6', epic: '#8b5cf6', legendary: '#f59e0b' };
@@ -54,9 +53,9 @@ export default function Dashboard() {
             equipped={equipped}
             appearance={user || {}}
             size={260}
+            action={activeEmote ? `emote-${activeEmote.id}` : null}
           />
           <span style={styles.editPill} className="avatar-edit-pill">✏️ Edit</span>
-          {activeEmote && <EmoteOverlay emote={activeEmote} offsetY={-40} />}
         </Link>
 
         <div style={styles.identity}>

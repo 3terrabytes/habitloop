@@ -79,6 +79,7 @@ export default function PixelCharacter({
   equipped   = {},
   size       = 120,
   cheering   = false,
+  action     = null,   // 'slash' | 'cast' | 'heal' | 'guard' | 'hurt' | null
 }) {
   // ── Appearance defaults ──────────────────────────────────────────────────
   // Accept both bare names ({skin, hair, ...}) and prefixed names
@@ -113,7 +114,7 @@ export default function PixelCharacter({
   const trick = useRandomPetTrick(!!companion);
 
   return (
-    <div style={{ width: size, height: size, imageRendering: 'pixelated', flexShrink: 0, overflow: 'visible' }}>
+    <div className={action ? `char-${action}` : ''} style={{ width: size, height: size, imageRendering: 'pixelated', flexShrink: 0, overflow: 'visible' }}>
       <svg
         width={size} height={size}
         viewBox="0 0 80 80"
@@ -154,104 +155,114 @@ export default function PixelCharacter({
           </g>
         )}
 
-        {/* ── LEGS ─────────────────────────────────────────────────────── */}
-        <rect x="32" y="54" width="6" height="14" fill="#3b3060" />
-        <rect x="42" y="54" width="6" height="14" fill="#3b3060" />
-        <rect x="32" y="54" width="6" height="2"  fill="#251a40" />
-        <rect x="42" y="54" width="6" height="2"  fill="#251a40" />
-        {/* Boots */}
-        <rect x="31" y="66" width="8" height="4" fill="#2a2020" />
-        <rect x="41" y="66" width="8" height="4" fill="#2a2020" />
-        <rect x="30" y="68" width="4" height="2" fill="#1a1010" />
-        <rect x="40" y="68" width="4" height="2" fill="#1a1010" />
+        {/* ── LEGS — grouped so emotes can fold/cross them ────────────── */}
+        <g className="pc-leg pc-leg-left">
+          <rect x="32" y="54" width="6" height="14" fill="#3b3060" />
+          <rect x="32" y="54" width="6" height="2"  fill="#251a40" />
+          {/* Boot */}
+          <rect x="31" y="66" width="8" height="4" fill="#2a2020" />
+          <rect x="30" y="68" width="4" height="2" fill="#1a1010" />
+        </g>
+        <g className="pc-leg pc-leg-right">
+          <rect x="42" y="54" width="6" height="14" fill="#3b3060" />
+          <rect x="42" y="54" width="6" height="2"  fill="#251a40" />
+          {/* Boot */}
+          <rect x="41" y="66" width="8" height="4" fill="#2a2020" />
+          <rect x="40" y="68" width="4" height="2" fill="#1a1010" />
+        </g>
 
         {/* ── TORSO ────────────────────────────────────────────────────── */}
-        <rect x="28" y="36" width="24" height="20" fill={bodyColor} />
-        {/* Belt / waist */}
-        <rect x="28" y="52" width="24" height="3" fill={darken(bodyColor, 20)} />
-        <rect x="38" y="52" width="4"  height="3" fill="#f5c542" />
-        {/* Chest highlight */}
-        <rect x="30" y="38" width="20" height="2"  fill={armorHL} />
-        {/* Center line */}
-        <rect x="39" y="38" width="2"  height="14" fill={darken(bodyColor, 25)} />
-        {/* Shoulder guards */}
-        <rect x="25" y="36" width="6"  height="6"  fill={armorHL} />
-        <rect x="49" y="36" width="6"  height="6"  fill={armorHL} />
-        {/* Female: subtle torso shaping */}
-        {gender === 1 && (
-          <>
-            <rect x="30" y="42" width="4" height="2" fill={darken(bodyColor, 15)} />
-            <rect x="46" y="42" width="4" height="2" fill={darken(bodyColor, 15)} />
-          </>
-        )}
+        <g className="pc-torso">
+          <rect x="28" y="36" width="24" height="20" fill={bodyColor} />
+          {/* Belt / waist */}
+          <rect x="28" y="52" width="24" height="3" fill={darken(bodyColor, 20)} />
+          <rect x="38" y="52" width="4"  height="3" fill="#f5c542" />
+          {/* Chest highlight */}
+          <rect x="30" y="38" width="20" height="2"  fill={armorHL} />
+          {/* Center line */}
+          <rect x="39" y="38" width="2"  height="14" fill={darken(bodyColor, 25)} />
+          {/* Shoulder guards */}
+          <rect x="25" y="36" width="6"  height="6"  fill={armorHL} />
+          <rect x="49" y="36" width="6"  height="6"  fill={armorHL} />
+          {/* Female: subtle torso shaping */}
+          {gender === 1 && (
+            <>
+              <rect x="30" y="42" width="4" height="2" fill={darken(bodyColor, 15)} />
+              <rect x="46" y="42" width="4" height="2" fill={darken(bodyColor, 15)} />
+            </>
+          )}
+        </g>
 
-        {/* ── ARMS ─────────────────────────────────────────────────────── */}
-        <rect x="22" y="38" width="6" height="16" fill={bodyColor} />
-        <rect x="52" y="38" width="6" height="16" fill={bodyColor} />
-        <rect x="22" y="38" width="6" height="2"  fill={armorHL} />
-        <rect x="52" y="38" width="6" height="2"  fill={armorHL} />
-        {/* Hands (skin) */}
-        <rect x="22" y="52" width="6" height="4" fill={skin} />
-        <rect x="52" y="52" width="6" height="4" fill={skin} />
-
-        {/* ── WEAPON in right hand — pixel-art sprite per class ───────── */}
-        {weapon ? renderWeapon(weapon) : (
-          <>
-            {/* Default plain sword */}
-            <rect x="55" y="30" width="3" height="26" fill="#c0c0c0" />
-            <rect x="53" y="42" width="7" height="3"  fill="#8b6914" />
-            <rect x="55" y="28" width="3" height="4"  fill="#f0d060" />
-          </>
-        )}
+        {/* ── ARMS — grouped so emotes can wave/clap/flex ──────────────── */}
+        <g className="pc-arm pc-arm-left">
+          <rect x="22" y="38" width="6" height="16" fill={bodyColor} />
+          <rect x="22" y="38" width="6" height="2"  fill={armorHL} />
+          {/* Hand */}
+          <rect x="22" y="52" width="6" height="4" fill={skin} />
+        </g>
+        <g className="pc-arm pc-arm-right">
+          <rect x="52" y="38" width="6" height="16" fill={bodyColor} />
+          <rect x="52" y="38" width="6" height="2"  fill={armorHL} />
+          {/* Hand */}
+          <rect x="52" y="52" width="6" height="4" fill={skin} />
+          {/* Weapon travels with the right arm so it visually stays in-hand */}
+          {weapon ? renderWeapon(weapon) : (
+            <>
+              {/* Default plain sword */}
+              <rect x="55" y="30" width="3" height="26" fill="#c0c0c0" />
+              <rect x="53" y="42" width="7" height="3"  fill="#8b6914" />
+              <rect x="55" y="28" width="3" height="4"  fill="#f0d060" />
+            </>
+          )}
+        </g>
 
         {/* ── NECK ─────────────────────────────────────────────────────── */}
         <rect x="36" y="30" width="8" height="6" fill={skinDark} />
 
-        {/* ── HEAD (base skin) ─────────────────────────────────────────── */}
-        <rect x="28" y="12" width="24" height="20" fill={skin} />
-        {/* Subtle face shading */}
-        <rect x="28" y="30" width="24" height="2" fill={skinDark} />
-        {/* Ears */}
-        <rect x="24" y="20" width="4" height="6" fill={skin} />
-        <rect x="52" y="20" width="4" height="6" fill={skin} />
-        <rect x="24" y="24" width="4" height="2" fill={skinDark} />
-        <rect x="52" y="24" width="4" height="2" fill={skinDark} />
+        {/* ── HEAD (entire head group — emote keyframes target this for
+            nodding / bowing / tilting) ─────────────────────────────── */}
+        <g className="pc-head">
+          <rect x="28" y="12" width="24" height="20" fill={skin} />
+          {/* Subtle face shading */}
+          <rect x="28" y="30" width="24" height="2" fill={skinDark} />
+          {/* Ears */}
+          <rect x="24" y="20" width="4" height="6" fill={skin} />
+          <rect x="52" y="20" width="4" height="6" fill={skin} />
+          <rect x="24" y="24" width="4" height="2" fill={skinDark} />
+          <rect x="52" y="24" width="4" height="2" fill={skinDark} />
 
-        {/* ── HAIR ─────────────────────────────────────────────────────── */}
-        {renderHair(hairStyle, hair, hairDark, gender)}
+          {/* Hair */}
+          {renderHair(hairStyle, hair, hairDark, gender)}
 
-        {/* ── EYES ─────────────────────────────────────────────────────── */}
-        {/* Sclera */}
-        <rect x="32" y="20" width="6" height="5" fill="white" />
-        <rect x="42" y="20" width="6" height="5" fill="white" />
-        {/* Iris */}
-        <rect x="34" y="21" width="3" height="3" fill={eyes} />
-        <rect x="44" y="21" width="3" height="3" fill={eyes} />
-        {/* Pupil */}
-        <rect x="35" y="22" width="1" height="1" fill="black" />
-        <rect x="45" y="22" width="1" height="1" fill="black" />
-        {/* Catchlight */}
-        <rect x="34" y="21" width="1" height="1" fill="white" opacity="0.8" />
-        <rect x="44" y="21" width="1" height="1" fill="white" opacity="0.8" />
-        {/* Brows */}
-        <rect x="32" y="18" width="6" height="2" fill={hairDark} />
-        <rect x="42" y="18" width="6" height="2" fill={hairDark} />
+          {/* Eyes */}
+          <rect x="32" y="20" width="6" height="5" fill="white" />
+          <rect x="42" y="20" width="6" height="5" fill="white" />
+          <rect x="34" y="21" width="3" height="3" fill={eyes} />
+          <rect x="44" y="21" width="3" height="3" fill={eyes} />
+          <rect x="35" y="22" width="1" height="1" fill="black" />
+          <rect x="45" y="22" width="1" height="1" fill="black" />
+          <rect x="34" y="21" width="1" height="1" fill="white" opacity="0.8" />
+          <rect x="44" y="21" width="1" height="1" fill="white" opacity="0.8" />
+          {/* Brows */}
+          <rect x="32" y="18" width="6" height="2" fill={hairDark} />
+          <rect x="42" y="18" width="6" height="2" fill={hairDark} />
 
-        {/* ── NOSE ─────────────────────────────────────────────────────── */}
-        <rect x="38" y="25" width="4" height="2" fill={skinDark} />
+          {/* Nose */}
+          <rect x="38" y="25" width="4" height="2" fill={skinDark} />
 
-        {/* ── MOUTH ────────────────────────────────────────────────────── */}
-        {gender === 1 ? (
-          <>
-            <rect x="35" y="28" width="10" height="2" fill="#c84a5a" />
-            <rect x="36" y="27" width="8"  height="1" fill="#a83a4a" />
-          </>
-        ) : (
-          <rect x="35" y="28" width="10" height="2" fill="#9c5040" />
-        )}
+          {/* Mouth */}
+          {gender === 1 ? (
+            <>
+              <rect x="35" y="28" width="10" height="2" fill="#c84a5a" />
+              <rect x="36" y="27" width="8"  height="1" fill="#a83a4a" />
+            </>
+          ) : (
+            <rect x="35" y="28" width="10" height="2" fill="#9c5040" />
+          )}
 
-        {/* ── BEARD ────────────────────────────────────────────────────── */}
-        {renderBeard(beard, hair, hairDark)}
+          {/* Beard */}
+          {renderBeard(beard, hair, hairDark)}
+        </g>
 
         {/* ── HELM hint when armor is equipped ─────────────────────────── */}
         {armor && hairStyle !== 5 && (

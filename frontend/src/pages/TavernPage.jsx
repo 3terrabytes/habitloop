@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import TavernScene, { TILE, WORLD_COLS, ROWS, WORLD_W, VIEW_W, HORIZON, FLOOR_H } from '../components/TavernScene';
 import FurnitureSprite from '../components/FurnitureSprite';
 import useTavernPresence from '../hooks/useTavernPresence';
+import useEmoteBus from '../hooks/useEmoteBus';
 
 // ── TavernPage ─────────────────────────────────────────────────────
 // Walkable, multi-visitor tavern with a panning camera, placement ghost,
@@ -60,7 +61,30 @@ function OwnTavern() {
 
   // The page is its own tavern, so the WS owner is the logged-in user.
   const ownerUsername = user?.username || null;
-  const { peers, connected, sendMove } = useTavernPresence(ownerUsername);
+  const { peers, connected, sendMove, sendEmote } = useTavernPresence(ownerUsername);
+  const { activeEmote } = useEmoteBus({ user });
+  // Forward locally-played emotes to peers via WS so they animate over there too.
+  useEffect(() => {
+    if (activeEmote && sendEmote) sendEmote(activeEmote.id);
+  }, [activeEmote, sendEmote]);
+  // Peer emotes received over WS — keyed by userId, auto-clear after 1.6s.
+  const [peerEmotes, setPeerEmotes] = useState({});
+  useEffect(() => {
+    const onPeer = (ev) => {
+      const { userId, emoteId } = ev.detail || {};
+      if (!userId || !emoteId || userId === user?.id) return;
+      setPeerEmotes(prev => ({ ...prev, [userId]: emoteId }));
+      setTimeout(() => {
+        setPeerEmotes(prev => {
+          if (prev[userId] !== emoteId) return prev;
+          const { [userId]: _, ...rest } = prev;
+          return rest;
+        });
+      }, 1600);
+    };
+    window.addEventListener('tickd:tavern-emote', onPeer);
+    return () => window.removeEventListener('tickd:tavern-emote', onPeer);
+  }, [user?.id]);
 
   const tavernPlay = useTavernPlayer({
     placements: data?.placements || [],
@@ -150,11 +174,14 @@ function OwnTavern() {
         y: tavernPlay.pos.y,
         facing: tavernPlay.facing,
         moving: tavernPlay.moving,
+        emote: activeEmote?.id || null,
       });
     }
-    for (const p of peers.values()) list.push(p);
+    for (const p of peers.values()) {
+      list.push({ ...p, emote: peerEmotes[p.userId] || null });
+    }
     return list;
-  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing, tavernPlay.moving, data]);
+  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing, tavernPlay.moving, data, activeEmote, peerEmotes]);
 
   if (!data) {
     return <div className="card" style={{ padding: 24, textAlign: 'center' }}>Loading your tavern...</div>;
@@ -349,7 +376,26 @@ function VisitTavern({ username }) {
   }, [username]);
   useEffect(() => { load(); }, [load]);
 
-  const { peers, connected, sendMove } = useTavernPresence(username);
+  const { peers, connected, sendMove, sendEmote } = useTavernPresence(username);
+  const { activeEmote } = useEmoteBus({ user });
+  useEffect(() => { if (activeEmote && sendEmote) sendEmote(activeEmote.id); }, [activeEmote, sendEmote]);
+  const [peerEmotes, setPeerEmotes] = useState({});
+  useEffect(() => {
+    const onPeer = (ev) => {
+      const { userId, emoteId } = ev.detail || {};
+      if (!userId || !emoteId || userId === user?.id) return;
+      setPeerEmotes(prev => ({ ...prev, [userId]: emoteId }));
+      setTimeout(() => {
+        setPeerEmotes(prev => {
+          if (prev[userId] !== emoteId) return prev;
+          const { [userId]: _, ...rest } = prev;
+          return rest;
+        });
+      }, 1600);
+    };
+    window.addEventListener('tickd:tavern-emote', onPeer);
+    return () => window.removeEventListener('tickd:tavern-emote', onPeer);
+  }, [user?.id]);
 
   const tavernPlay = useTavernPlayer({
     placements: data?.placements || [],
@@ -391,11 +437,14 @@ function VisitTavern({ username }) {
         y: tavernPlay.pos.y,
         facing: tavernPlay.facing,
         moving: tavernPlay.moving,
+        emote: activeEmote?.id || null,
       });
     }
-    for (const p of peers.values()) list.push(p);
+    for (const p of peers.values()) {
+      list.push({ ...p, emote: peerEmotes[p.userId] || null });
+    }
     return list;
-  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing, tavernPlay.moving]);
+  }, [user, peers, tavernPlay.pos.x, tavernPlay.pos.y, tavernPlay.facing, tavernPlay.moving, activeEmote, peerEmotes]);
 
   if (err) {
     return <div className="card" style={{ padding: 24, textAlign: 'center', color: '#fca5a5' }}>{err}</div>;

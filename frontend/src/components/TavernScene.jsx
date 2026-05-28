@@ -390,6 +390,7 @@ function VisitorAvatar({ v, isLocal, speech }) {
           appearance={v.appearance || {}}
           equipped={{ ...(v.equipped || {}), companion: null }}
           size={AV_SIZE}
+          action={v.emote ? `emote-${v.emote}` : null}
         />
         {isLocal && (
           <div style={{

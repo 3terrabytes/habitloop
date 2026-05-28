@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import PixelCharacter, { PetSprite } from '../components/PixelCharacter';
 import HitBurst from '../components/HitBurst';
 import ScreenFlash from '../components/ScreenFlash';
+import BossSprite from '../components/BossSprite';
+import AttackSlide from '../components/AttackSlide';
+import VictoryWipe from '../components/VictoryWipe';
 
 // ── Tuning constants ──────────────────────────────────────────────────
 // Player max HP scales with level: 100 + 20 per level.
@@ -91,6 +94,12 @@ const COMBOS = {
   'soul_drain+death_blossom': { name: 'HARVEST',  bonus: 1.45, alwaysCrit: true,  fx: 'shadow',    color: '#a78bfa' },
 };
 
+// Monsters that have a custom pixel-art BossSprite (no emoji). Anything not
+// in this set keeps the old emoji rendering.
+const BOSS_SPRITE_IDS = new Set([
+  'gravelord', 'lich_king', 'fire_titan', 'ice_serpent', 'void_prince',
+]);
+
 // Cameos — wholesome non-events that fire ~5% per player turn. Pure flavor,
 // zero mechanical impact. The names are real users + the dev's own handle as
 // a wink to anyone reading.
@@ -153,6 +162,37 @@ export default function DungeonPage() {
   // Effects state: which target has an active hit burst, and the screen flash.
   const [hitBurst, setHitBurst] = useState(null);   // { target: 'monster'|'player', element, id }
   const [screenFlash, setScreenFlash] = useState(null); // { color, id }
+  const [attackSlide, setAttackSlide] = useState(null); // { element, direction, id }
+  const [victoryWipe, setVictoryWipe] = useState(null); // { text, subtitle, id }
+  const [playerAction, setPlayerAction] = useState(null); // 'slash'|'cast'|'heal'|'guard'|'hurt'|null
+  const [bossAction, setBossAction] = useState('idle'); // 'idle'|'strike'|'heavy'|'hurt'|'die'
+
+  // Map the existing attack.animation key to a player char-* action class.
+  const playerActionFor = (anim, tag) => {
+    if (tag === 'heal')   return 'heal';
+    if (tag === 'defend') return 'guard';
+    if (['missile', 'fire', 'frost', 'arrow', 'volley', 'lightning', 'poison', 'shadow'].includes(anim)) return 'cast';
+    return 'slash';
+  };
+
+  const fireAttackSlide = (element, direction = 'lr') => {
+    const id = Date.now() + Math.random();
+    setAttackSlide({ element, direction, id });
+    setTimeout(() => setAttackSlide(a => (a && a.id === id) ? null : a), 360);
+  };
+  const fireVictoryWipe = (text, subtitle) => {
+    const id = Date.now() + Math.random();
+    setVictoryWipe({ text, subtitle, id });
+    setTimeout(() => setVictoryWipe(w => (w && w.id === id) ? null : w), 900);
+  };
+  const firePlayerAction = (kind) => {
+    setPlayerAction(kind);
+    setTimeout(() => setPlayerAction(a => a === kind ? null : a), 500);
+  };
+  const fireBossAction = (kind, durationMs = 700) => {
+    setBossAction(kind);
+    setTimeout(() => setBossAction(a => a === kind ? 'idle' : a), durationMs);
+  };
 
   // Helpers — keyed by id so concurrent triggers don't cancel each other.
   const fireHitBurst = (target, element) => {
@@ -453,6 +493,10 @@ export default function DungeonPage() {
 
     const anim = PLAYER_ANIM[attack.animation] || 'battle-player-dash';
     setPlayerAnim(anim);
+    firePlayerAction(playerActionFor(attack.animation, attack.tag));
+    if (attack.tag !== 'heal' && attack.tag !== 'defend') {
+      fireAttackSlide(attack.element || 'physical', 'lr');
+    }
 
     const projConfig = PROJECTILE[attack.animation];
     if (projConfig) {
@@ -504,6 +548,7 @@ export default function DungeonPage() {
         shake();
       }
       setMonsterAnim('battle-monster-hurt');
+      fireBossAction('hurt', 400);
       popDamage('monster', dmg, { crit });
       fireHitBurst('monster', attack.element || 'physical');
       if (crit) {
@@ -601,9 +646,11 @@ export default function DungeonPage() {
     // Monster defeat check — covers normal hits, pet kills, or DoT kills below.
     if (newMonsterHp <= 0) {
       setMonsterAnim('battle-monster-die');
+      setBossAction('die');
       setLootDrop({ xp: monster.xp, gold: monster.gold, id: Date.now() });
       addLog(`💀 ${monster.name} falls!`);
       await sleep(700);
+      fireVictoryWipe('VICTORY!', `${monster.name} defeated`);
       flashBanner('VICTORY!', '#fde047', 1100);
       await sleep(600);
       try {
@@ -682,6 +729,8 @@ export default function DungeonPage() {
       await sleep(400);
     } else {
       setMonsterAnim('battle-monster-attack');
+      fireBossAction(currentIntent.kind === 'heavy' ? 'heavy' : 'strike', currentIntent.kind === 'heavy' ? 700 : 400);
+      fireAttackSlide(monster.element || 'physical', 'rl');
       await sleep(250);
       const intentPower = currentIntent.power;
       let dmg = monsterDamage({ ...monster, power: intentPower }, loadout.armor, defenseBuff || 1);
@@ -1041,7 +1090,8 @@ export default function DungeonPage() {
                 {/* Soft glow under player feet for grounding */}
                 <div className="combat-light player" />
                 <div className={`${playerAnim || 'battle-idle'}`} style={{ position: 'relative' }}>
-                  <PixelCharacter appearance={user || {}} equipped={inventory.equipped} size={130} />
+                  <PixelCharacter appearance={user || {}} equipped={inventory.equipped} size={130}
+                    action={playerAction} />
                   {hitBurst?.target === 'player' && <HitBurst element={hitBurst.element} />}
                   {damages.filter(d => d.target === 'player').map(d => (
                     <div key={d.id} className={`battle-damage ${d.heal ? 'heal' : ''} ${d.crit ? 'crit' : ''}`}>
@@ -1079,7 +1129,11 @@ export default function DungeonPage() {
                 fontSize: isBoss ? 140 : isElite ? 120 : 110, lineHeight: 1,
                 filter: isBoss ? 'drop-shadow(0 0 24px #ef444466)' : isElite ? 'drop-shadow(0 0 18px #fb923c66)' : 'none',
               }}>
-                <span>{monster.sprite}</span>
+                {/* If the monster has a custom pixel-art boss sprite, use it;
+                    otherwise fall back to the existing emoji glyph. */}
+                {BOSS_SPRITE_IDS.has(monster.id)
+                  ? <BossSprite id={monster.id} action={bossAction} size={isBoss ? 180 : 140} />
+                  : <span>{monster.sprite}</span>}
                 {hitBurst?.target === 'monster' && <HitBurst element={hitBurst.element} />}
                 {damages.filter(d => d.target === 'monster').map(d => (
                   <div key={d.id} className={`battle-damage ${d.crit ? 'crit' : ''}`}>{d.value}</div>
@@ -1141,6 +1195,24 @@ export default function DungeonPage() {
             )}
 
             {screenFlash && <ScreenFlash color={screenFlash.color} />}
+
+            {/* Pokémon-style attack-slide sprite crosses the stage before damage lands */}
+            {attackSlide && (
+              <AttackSlide
+                key={attackSlide.id}
+                element={attackSlide.element}
+                direction={attackSlide.direction}
+              />
+            )}
+
+            {/* Victory two-half wipe + card */}
+            {victoryWipe && (
+              <VictoryWipe
+                key={victoryWipe.id}
+                text={victoryWipe.text}
+                subtitle={victoryWipe.subtitle}
+              />
+            )}
           </div>
         </div>
 

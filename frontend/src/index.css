@@ -173,9 +173,208 @@ input {
    transform). */
 .tavern-sitting { transform: translateY(6px) scaleY(0.82); }
 
-/* ── Emote overlays ──────────────────────────────────────────────────
-   Each emote animation plays once over its lifetime (~1.6s). The
-   parent removes the overlay after the same duration. */
+/* ── Body-part emote animations ──────────────────────────────────────
+   Emotes are NOT floating glyphs. They animate the avatar itself by
+   targeting body-part groups (pc-head, pc-arm-left, pc-arm-right,
+   pc-leg-left, pc-leg-right, pc-torso) inside PixelCharacter. The
+   parent wrapping <div> gets a class `char-emote-<id>` and these
+   rules animate the matching parts.
+
+   The trick to making SVG rotations look natural: set transform-box:
+   fill-box and transform-origin appropriate to the joint. Arms rotate
+   from the shoulder (top), legs from the hip (top), head from the
+   neck (bottom). */
+.pc-arm  { transform-box: fill-box; transform-origin: 50% 0%; }
+.pc-leg  { transform-box: fill-box; transform-origin: 50% 0%; }
+.pc-head { transform-box: fill-box; transform-origin: 50% 100%; }
+.pc-torso{ transform-box: fill-box; transform-origin: 50% 100%; }
+
+/* WAVE — right arm rocks side to side. */
+@keyframes pc-wave-arm {
+  0%, 100% { transform: rotate(-20deg); }
+  50%      { transform: rotate(45deg); }
+}
+.char-emote-wave .pc-arm-right { animation: pc-wave-arm 0.4s ease-in-out 4; }
+
+/* BOW — head + body tilt forward. */
+@keyframes pc-bow-head {
+  0%, 100% { transform: rotate(0); }
+  40%, 70% { transform: rotate(35deg) translateY(2px); }
+}
+@keyframes pc-bow-torso {
+  0%, 100% { transform: rotate(0); }
+  40%, 70% { transform: rotate(15deg); }
+}
+.char-emote-bow .pc-head  { animation: pc-bow-head  1.4s ease-in-out 1; }
+.char-emote-bow .pc-torso { animation: pc-bow-torso 1.4s ease-in-out 1; }
+
+/* CLAP — both arms rotate inward, oscillating. */
+@keyframes pc-clap-left  { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(40deg); } }
+@keyframes pc-clap-right { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-40deg); } }
+.char-emote-clap .pc-arm-left  { animation: pc-clap-left  0.28s ease-in-out 5; }
+.char-emote-clap .pc-arm-right { animation: pc-clap-right 0.28s ease-in-out 5; }
+
+/* NOD — head bobs vertically. */
+@keyframes pc-nod-head {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px) rotate(-8deg); }
+}
+.char-emote-nod .pc-head { animation: pc-nod-head 0.35s ease-in-out 4; }
+
+/* DANCE — body sways + arms wave overhead. */
+@keyframes pc-dance-torso {
+  0%, 100% { transform: rotate(-6deg); }
+  50%      { transform: rotate(6deg); }
+}
+@keyframes pc-dance-arm-left {
+  0%, 100% { transform: rotate(-90deg); }
+  50%      { transform: rotate(-130deg); }
+}
+@keyframes pc-dance-arm-right {
+  0%, 100% { transform: rotate(90deg); }
+  50%      { transform: rotate(130deg); }
+}
+.char-emote-dance .pc-torso     { animation: pc-dance-torso     0.32s ease-in-out 5; }
+.char-emote-dance .pc-arm-left  { animation: pc-dance-arm-left  0.32s ease-in-out 5; }
+.char-emote-dance .pc-arm-right { animation: pc-dance-arm-right 0.32s ease-in-out 5; }
+
+/* SLEEP — head tilts heavily, gentle slump. */
+@keyframes pc-sleep-head {
+  0%, 100% { transform: rotate(-25deg) translate(-2px, 1px); }
+  50%      { transform: rotate(-30deg) translate(-2px, 2px); }
+}
+.char-emote-sleep .pc-head { animation: pc-sleep-head 1.4s ease-in-out 1; }
+
+/* SHRUG — both arms slightly raised at sides. */
+@keyframes pc-shrug-arm-left  { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-25deg); } }
+@keyframes pc-shrug-arm-right { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(25deg); } }
+.char-emote-shrug .pc-arm-left  { animation: pc-shrug-arm-left  0.7s ease-in-out 2; }
+.char-emote-shrug .pc-arm-right { animation: pc-shrug-arm-right 0.7s ease-in-out 2; }
+
+/* POINT — right arm extends out horizontally. */
+@keyframes pc-point-arm {
+  0%, 100% { transform: rotate(0); }
+  30%, 80% { transform: rotate(80deg); }
+}
+.char-emote-point .pc-arm-right { animation: pc-point-arm 1.4s ease-out 1; }
+
+/* CHEER — both arms straight up, slight body jump. */
+@keyframes pc-cheer-arm-left  {
+  0%, 100% { transform: rotate(0); }
+  30%, 80% { transform: rotate(160deg); }
+}
+@keyframes pc-cheer-arm-right {
+  0%, 100% { transform: rotate(0); }
+  30%, 80% { transform: rotate(-160deg); }
+}
+@keyframes pc-cheer-body {
+  0%, 100% { transform: translateY(0); }
+  20%      { transform: translateY(-6px); }
+  60%      { transform: translateY(-4px); }
+}
+.char-emote-cheer .pc-arm-left  { animation: pc-cheer-arm-left  1.4s ease-in-out 1; }
+.char-emote-cheer .pc-arm-right { animation: pc-cheer-arm-right 1.4s ease-in-out 1; }
+.char-emote-cheer               { animation: pc-cheer-body      1.4s ease-in-out 1; }
+
+/* FLEX — both arms bent up showing biceps, body puffs. */
+@keyframes pc-flex-arm-left  { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-150deg) translateY(-4px); } }
+@keyframes pc-flex-arm-right { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(150deg)  translateY(-4px); } }
+@keyframes pc-flex-torso     { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+.char-emote-flex .pc-arm-left  { animation: pc-flex-arm-left  0.7s ease-in-out 2; }
+.char-emote-flex .pc-arm-right { animation: pc-flex-arm-right 0.7s ease-in-out 2; }
+.char-emote-flex .pc-torso     { animation: pc-flex-torso     0.7s ease-in-out 2; }
+
+/* SALUTE — right arm bent up to forehead. */
+@keyframes pc-salute-arm {
+  0%, 100% { transform: rotate(0); }
+  30%, 80% { transform: rotate(-150deg) translateX(2px); }
+}
+.char-emote-salute .pc-arm-right { animation: pc-salute-arm 1.6s ease-in-out 1; }
+
+/* LAUGH — head tilts back, body shakes rapidly. */
+@keyframes pc-laugh-head { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-15deg) translateY(-2px); } }
+@keyframes pc-laugh-body { 0%, 100% { transform: translateX(0); }
+                           25%      { transform: translateX(-2px); }
+                           75%      { transform: translateX(2px); } }
+.char-emote-laugh .pc-head { animation: pc-laugh-head 0.35s ease-in-out 4; }
+.char-emote-laugh          { animation: pc-laugh-body 0.18s linear 8; }
+
+/* MEDITATE — arms forward palms up (slight bend), legs fold inward,
+   purple aura glow. */
+@keyframes pc-meditate-arm-left  { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-60deg); } }
+@keyframes pc-meditate-arm-right { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(60deg); } }
+@keyframes pc-meditate-leg-left  { 0%, 100% { transform: rotate(0)  translateY(0); }
+                                   50%      { transform: rotate(20deg) translateY(-2px); } }
+@keyframes pc-meditate-leg-right { 0%, 100% { transform: rotate(0)  translateY(0); }
+                                   50%      { transform: rotate(-20deg) translateY(-2px); } }
+@keyframes pc-meditate-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(167,139,250,0.4)); }
+  50%      { filter: drop-shadow(0 0 18px rgba(167,139,250,0.95)); }
+}
+.char-emote-meditate                { animation: pc-meditate-glow 1.6s ease-in-out 1; }
+.char-emote-meditate .pc-arm-left   { animation: pc-meditate-arm-left   1.6s ease-in-out 1; }
+.char-emote-meditate .pc-arm-right  { animation: pc-meditate-arm-right  1.6s ease-in-out 1; }
+.char-emote-meditate .pc-leg-left   { animation: pc-meditate-leg-left   1.6s ease-in-out 1; }
+.char-emote-meditate .pc-leg-right  { animation: pc-meditate-leg-right  1.6s ease-in-out 1; }
+
+/* LEVITATE — cross-legged in the air. Whole body lifts, legs fold in,
+   gentle spin, soft glow underneath. */
+@keyframes pc-levitate-body {
+  0%   { transform: translateY(0)   rotate(0); }
+  20%  { transform: translateY(-12px) rotate(0); }
+  50%  { transform: translateY(-14px) rotate(180deg); }
+  80%  { transform: translateY(-12px) rotate(360deg); }
+  100% { transform: translateY(0)   rotate(360deg); }
+}
+@keyframes pc-levitate-leg-left  { 0%, 100% { transform: rotate(0); }
+                                   20%, 80% { transform: rotate(35deg) translate(3px, -3px); } }
+@keyframes pc-levitate-leg-right { 0%, 100% { transform: rotate(0); }
+                                   20%, 80% { transform: rotate(-35deg) translate(-3px, -3px); } }
+@keyframes pc-levitate-arm-left  { 0%, 100% { transform: rotate(0); }
+                                   20%, 80% { transform: rotate(-30deg); } }
+@keyframes pc-levitate-arm-right { 0%, 100% { transform: rotate(0); }
+                                   20%, 80% { transform: rotate(30deg); } }
+.char-emote-levitate                {
+  animation: pc-levitate-body 1.6s ease-in-out 1;
+  filter: drop-shadow(0 8px 14px rgba(167,139,250,0.55));
+}
+.char-emote-levitate .pc-leg-left   { animation: pc-levitate-leg-left   1.6s ease-in-out 1; }
+.char-emote-levitate .pc-leg-right  { animation: pc-levitate-leg-right  1.6s ease-in-out 1; }
+.char-emote-levitate .pc-arm-left   { animation: pc-levitate-arm-left   1.6s ease-in-out 1; }
+.char-emote-levitate .pc-arm-right  { animation: pc-levitate-arm-right  1.6s ease-in-out 1; }
+
+/* GOD MODE — whole body glows + scales up + slight float. */
+@keyframes pc-god-pulse {
+  0%, 100% { transform: scale(1)    translateY(0);
+             filter: drop-shadow(0 0 8px #fde047) brightness(1); }
+  50%      { transform: scale(1.15) translateY(-6px);
+             filter: drop-shadow(0 0 22px #fde047) drop-shadow(0 0 40px #fbbf24) brightness(1.5); }
+}
+@keyframes pc-god-arms { 0%, 100% { transform: rotate(0); }
+                         50%      { transform: rotate(170deg); } }
+.char-emote-god_mode                { animation: pc-god-pulse 1.6s ease-in-out 1; }
+.char-emote-god_mode .pc-arm-left   { animation: pc-god-arms  1.6s ease-in-out 1; }
+.char-emote-god_mode .pc-arm-right  {
+  animation: pc-god-arms 1.6s ease-in-out 1;
+  /* Flip the rotation direction so the arms mirror. */
+  animation-direction: reverse;
+}
+
+/* SPARKLE BURST — rapid spin with rainbow glow. */
+@keyframes pc-sparkle-spin {
+  0%   { transform: rotate(0)   scale(1); }
+  50%  { transform: rotate(180deg) scale(1.1);
+         filter: drop-shadow(0 0 14px #f0abfc) drop-shadow(0 0 28px #c4b5fd); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.char-emote-sparkle_burst { animation: pc-sparkle-spin 1.6s ease-in-out 1; }
+
+/* ── Floating-glyph emote overlay (LEGACY — left here in case any other
+   page still imports it. Avatar-driven emotes are the new canonical
+   path; the glyph overlay is hidden by default.) */
+.emote-overlay { display: none; }
+
+/* ── Legacy emote-pop keyframes kept so any old references compile ──── */
 @keyframes emote-pop {
   0%   { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.6); }
   20%  { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1.15); }
@@ -274,6 +473,143 @@ input {
 .emote-overlay.emote-levitate { animation: emote-pop 1.6s ease-out forwards, emote-levitate-spin 1.6s linear 1; }
 .emote-overlay.emote-godmode  { animation: emote-pop 1.6s ease-out forwards, emote-godmode-pulse 0.5s ease-in-out 3; }
 .emote-overlay.emote-sparkle  { animation: emote-pop 1.6s ease-out forwards, emote-sparkle-burst 0.55s ease-in-out 3; }
+
+/* ── Boss sprite actions (custom art replaces emoji) ─────────────────── */
+@keyframes boss-idle-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+@keyframes boss-strike-lunge {
+  0%   { transform: translateX(0); }
+  30%  { transform: translateX(-14px) scaleX(1.05); }
+  60%  { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+@keyframes boss-heavy-rear {
+  0%   { transform: translate(0, 0) scale(1); }
+  25%  { transform: translate(0, -8px) scale(1.12); }
+  55%  { transform: translate(-18px, 6px) scale(1.18); }
+  80%  { transform: translate(2px, 0) scale(1); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes boss-hurt-flash {
+  0%   { transform: translateX(0); filter: brightness(1); }
+  20%  { transform: translateX(8px); filter: brightness(3) saturate(0); }
+  50%  { transform: translateX(-4px); filter: brightness(1.5) saturate(0.5); }
+  100% { transform: translateX(0); filter: brightness(1); }
+}
+@keyframes boss-die-fade {
+  0%   { transform: translateY(0)   scale(1)   rotate(0);   opacity: 1; }
+  40%  { transform: translateY(-4px) scale(1.1) rotate(-3deg); opacity: 1; }
+  100% { transform: translateY(20px) scale(0.6) rotate(15deg);  opacity: 0; }
+}
+.boss-sprite-wrap        { transform-origin: center bottom; }
+.boss-sprite-wrap.boss-idle   { animation: boss-idle-bob   1.6s ease-in-out infinite; }
+.boss-sprite-wrap.boss-strike { animation: boss-strike-lunge 0.35s ease-out 1; }
+.boss-sprite-wrap.boss-heavy  { animation: boss-heavy-rear   0.7s  ease-out 1; }
+.boss-sprite-wrap.boss-hurt   { animation: boss-hurt-flash   0.4s  ease-out 1; }
+.boss-sprite-wrap.boss-die    { animation: boss-die-fade     1.4s  ease-in forwards; }
+
+/* ── Player attack animations (PixelCharacter outer class) ──────────── */
+@keyframes char-slash-lunge {
+  0%   { transform: translateX(0)    rotate(0); }
+  35%  { transform: translateX(14px) rotate(6deg); }
+  70%  { transform: translateX(-4px) rotate(-3deg); }
+  100% { transform: translateX(0)    rotate(0); }
+}
+@keyframes char-cast-flash {
+  0%   { transform: translateY(0)    scale(1); filter: brightness(1); }
+  35%  { transform: translateY(-6px) scale(1.06); filter: brightness(1.6) drop-shadow(0 0 12px #c084fc); }
+  100% { transform: translateY(0)    scale(1); filter: brightness(1); }
+}
+@keyframes char-heal-pulse {
+  0%, 100% { filter: brightness(1); transform: translateY(0); }
+  50%      { filter: brightness(1.4) drop-shadow(0 0 14px #6ee7b7); transform: translateY(-3px); }
+}
+@keyframes char-guard-crouch {
+  0%   { transform: translateY(0)   scaleY(1); }
+  40%  { transform: translateY(4px) scaleY(0.85); filter: brightness(1.4) drop-shadow(0 0 10px #60a5fa); }
+  100% { transform: translateY(0)   scaleY(1); }
+}
+@keyframes char-hurt-jolt {
+  0%   { transform: translateX(0); filter: brightness(1); }
+  25%  { transform: translateX(-10px); filter: brightness(3) saturate(0) sepia(1) hue-rotate(-30deg); }
+  60%  { transform: translateX(4px);  filter: brightness(1.4) saturate(0.5); }
+  100% { transform: translateX(0); filter: brightness(1); }
+}
+.char-slash { animation: char-slash-lunge 0.4s  ease-out 1; }
+.char-cast  { animation: char-cast-flash  0.5s  ease-in-out 1; }
+.char-heal  { animation: char-heal-pulse  0.55s ease-in-out 1; }
+.char-guard { animation: char-guard-crouch 0.35s ease-in-out 1; }
+.char-hurt  { animation: char-hurt-jolt   0.4s  ease-out 1; }
+
+/* ── AttackSlide — Pokémon-style cross-screen attack overlay ─────────── */
+@keyframes attack-slide-lr {
+  0%   { transform: translateX(-30%) scale(0.6) rotate(-25deg); opacity: 0; }
+  20%  { opacity: 1; }
+  60%  { transform: translateX(70%)  scale(1.2) rotate(15deg);  opacity: 1; }
+  100% { transform: translateX(130%) scale(0.8) rotate(35deg);  opacity: 0; }
+}
+@keyframes attack-slide-rl {
+  0%   { transform: translateX(130%) scale(0.6) rotate(25deg); opacity: 0; }
+  20%  { opacity: 1; }
+  60%  { transform: translateX(30%)  scale(1.2) rotate(-15deg); opacity: 1; }
+  100% { transform: translateX(-30%) scale(0.8) rotate(-35deg); opacity: 0; }
+}
+.attack-slide { width: 100%; }
+.attack-slide-lr { animation: attack-slide-lr 0.36s cubic-bezier(0.4, 0.0, 0.2, 1) forwards; }
+.attack-slide-rl { animation: attack-slide-rl 0.36s cubic-bezier(0.4, 0.0, 0.2, 1) forwards; }
+
+/* Sprite recoil — defender shake on hit. */
+@keyframes sprite-recoil {
+  0%   { transform: translateX(0); }
+  20%  { transform: translateX(-10px); }
+  60%  { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+.sprite-recoil { animation: sprite-recoil 0.3s ease-out 1; }
+
+/* ── Victory wipe (Pokémon-style two-half reveal) ────────────────────── */
+@keyframes victory-top {
+  0%   { transform: translateY(-100%); }
+  35%  { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+@keyframes victory-bot {
+  0%   { transform: translateY(100%); }
+  35%  { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+@keyframes victory-card-pop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-6deg); }
+  35%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(2deg); }
+  60%  { opacity: 1; transform: translate(-50%, -50%) scale(1)    rotate(0); }
+  90%  { opacity: 1; transform: translate(-50%, -50%) scale(1)    rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9)  rotate(0); }
+}
+.victory-half {
+  position: absolute; left: 0; right: 0; height: 50%;
+  background: linear-gradient(180deg, rgba(15,15,30,0.92), rgba(15,15,30,0.6));
+}
+.victory-half.top { top: 0;    animation: victory-top 0.9s ease-out forwards; }
+.victory-half.bot { bottom: 0; animation: victory-bot 0.9s ease-out forwards; }
+.victory-card {
+  position: absolute; left: 50%; top: 50%;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  animation: victory-card-pop 0.9s ease-out forwards;
+}
+.victory-text {
+  font-size: 48px; font-weight: 800;
+  color: #fde047;
+  text-shadow: 0 0 18px #fbbf24, 4px 4px 0 #92400e;
+  letter-spacing: 0.15em;
+}
+.victory-subtitle {
+  margin-top: 4px;
+  font-size: 14px; color: #fef3c7;
+  letter-spacing: 0.1em;
+}
 
 /* ── Pet idle tricks ─────────────────────────────────────────────────────
    Fired briefly via a class toggle in PixelCharacter's useEffect every

@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import PixelCharacter, { PetSprite } from '../components/PixelCharacter';
+import BossSprite from '../components/BossSprite';
 import BannerName from '../components/BannerName';
 import useParty from '../hooks/useParty';
+import useEmoteBus from '../hooks/useEmoteBus';
 
 const ELEMENT_ICON = {
   fire: '🔥', ice: '❄️', poison: '☠️', shadow: '🌑',
@@ -26,6 +28,9 @@ export default function PartyPage() {
   const [friends, setFriends] = useState([]);
   const [loadout, setLoadout] = useState({ slotDetails: [] });
   const [toast, setToast] = useState(null);
+  // Emote bus — pressing E or clicking the top-bar button plays the
+  // equipped emote above the local party member's avatar.
+  const { activeEmote } = useEmoteBus({ user });
 
   const showToast = (msg, kind = 'info') => {
     setToast({ msg, kind, id: Date.now() });
@@ -204,6 +209,8 @@ export default function PartyPage() {
           onInvite={invite}
           onLeave={leave}
           onStart={start}
+          localUserId={user?.id}
+          activeEmoteId={activeEmote?.id}
         />
       )}
 
@@ -216,6 +223,7 @@ export default function PartyPage() {
           myTurn={myTurn}
           onAttack={submitAttack}
           onLeave={leave}
+          activeEmoteId={activeEmote?.id}
         />
       )}
 
@@ -269,7 +277,7 @@ function NoPartyView({ invites, onAccept, onDecline, onCreate }) {
 }
 
 // ── Lobby ───────────────────────────────────────────────────────────
-function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart }) {
+function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart, localUserId, activeEmoteId }) {
   const pendingIds = new Set((state.pending_invites || []).map(p => p.invitee_id));
   const invitableFriends = friends.filter(f =>
     !state.members.some(m => m.user_id === f.id)
@@ -293,7 +301,8 @@ function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart }) {
           {state.members.map(m => (
             <div key={m.user_id} className="card" style={{ padding: 8, textAlign: 'center', borderColor: m.user_id === state.host_id ? 'var(--gold)' : undefined }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginBottom: 4, gap: 4 }}>
-                <PixelCharacter appearance={m.appearance} equipped={{ ...m.equipped, companion: null }} size={70} />
+                <PixelCharacter appearance={m.appearance} equipped={{ ...m.equipped, companion: null }} size={70}
+                  action={m.user_id === localUserId && activeEmoteId ? `emote-${activeEmoteId}` : null} />
                 <PetSprite pet={m.equipped?.companion} playerSize={70} />
               </div>
               <BannerName username={m.username} banner={m.equipped?.banner} size="sm" />
@@ -360,7 +369,7 @@ function LobbyView({ state, me, isHost, friends, onInvite, onLeave, onStart }) {
 // Big visual layout: boss centered upper, party members in a row along the
 // lower edge. Highlight ring on whoever's turn it is. Each player sees their
 // own attack buttons; when it isn't their turn the buttons are disabled.
-function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave }) {
+function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave, activeEmoteId }) {
   const boss = state.boss;
   const bossPct = state.boss_max_hp ? (state.boss_hp / state.boss_max_hp) * 100 : 0;
   const activeMember = state.members[state.turn_index];
@@ -430,8 +439,8 @@ function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave }) {
               <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: '0.08em' }}>{phaseBanner.text}</span>
             </div>
           )}
-          <div style={{ textAlign: 'center', fontSize: 110, lineHeight: 1, filter: 'drop-shadow(0 0 24px #ef444466)' }}>
-            {boss?.sprite}
+          <div style={{ display: 'flex', justifyContent: 'center', filter: 'drop-shadow(0 0 24px #ef444466)' }}>
+            <BossSprite id={boss?.id} action="idle" size={170} />
           </div>
         </div>
 
@@ -462,7 +471,8 @@ function BattleView({ state, me, user, loadout, myTurn, onAttack, onLeave }) {
                   borderRadius: '50%',
                   boxShadow: isActive ? '0 0 24px #fde04788' : isMe ? '0 0 12px #6ee7b755' : 'none',
                 }}>
-                  <PixelCharacter appearance={m.appearance} equipped={{ ...m.equipped, companion: null }} size={86} />
+                  <PixelCharacter appearance={m.appearance} equipped={{ ...m.equipped, companion: null }} size={86}
+                    action={isMe && activeEmoteId ? `emote-${activeEmoteId}` : null} />
                   <PetSprite pet={m.equipped?.companion} playerSize={86} />
                 </div>
                 <div style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: isMe ? '#6ee7b7' : 'var(--text)' }}>
